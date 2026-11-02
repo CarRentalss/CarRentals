@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>$(AppTargetFramework)</TargetFramework>
+    <RootNamespace>CarRental.Api</RootNamespace>
+    <UserSecretsId>carrental-api-km2</UserSecretsId>
+    <!-- Komentarze XML trafiają do Swaggera -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(AspNetPackagesVersion)" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="$(AspNetPackagesVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(AspNetPackagesVersion)" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.*" />
+  </ItemGroup>
+
+</Project>

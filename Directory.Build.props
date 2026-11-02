@@ -1,0 +1,16 @@
+<Project>
+  <!-- Wspólne ustawienia dla wszystkich projektów w solucji -->
+  <PropertyGroup>
+    <!-- Domyślnie .NET 10 (LTS). Na komputerze tylko z .NET 8 SDK: dotnet test -p:AppTargetFramework=net8.0 -->
+    <AppTargetFramework Condition="'$(AppTargetFramework)' == ''">net10.0</AppTargetFramework>
+    <AspNetPackagesVersion Condition="'$(AppTargetFramework)' == 'net8.0'">8.0.*</AspNetPackagesVersion>
+    <AspNetPackagesVersion Condition="'$(AspNetPackagesVersion)' == ''">10.0.*</AspNetPackagesVersion>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- Analizatory Roslyn (wymaganie: statyczna analiza kodu) -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+  </PropertyGroup>
+</Project>

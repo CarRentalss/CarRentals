@@ -1,19 +1,72 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+# CI dla Car Rental API: build, testy z pokryciem, skan podatnych paczek, paczka do wdrożenia.
+# Pipeline w ADO ("Jagna676.CarRentals") czyta ten plik z katalogu głównego repozytorium.
 
 trigger:
-- main
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
 
 pool:
   vmImage: ubuntu-latest
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  buildConfiguration: Release
+  solution: CarRentals.sln
+  apiProject: backend/CarRental.Api/CarRental.Api.csproj
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+steps:
+  - task: UseDotNet@2
+    displayName: Instalacja .NET 10 SDK
+    inputs:
+      packageType: sdk
+      version: 10.0.x
+
+  - script: dotnet restore $(solution)
+    displayName: Restore
+
+  - script: dotnet build $(solution) -c $(buildConfiguration) --no-restore
+    displayName: Build (z analizatorami Roslyn)
+
+  - script: >
+      dotnet test $(solution) -c $(buildConfiguration) --no-build
+      --logger trx
+      --collect "XPlat Code Coverage"
+      --results-directory $(Agent.TempDirectory)/TestResults
+    displayName: Testy jednostkowe i integracyjne
+
+  - task: PublishTestResults@2
+    displayName: Publikacja wyników testów
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: VSTest
+      testResultsFiles: $(Agent.TempDirectory)/TestResults/**/*.trx
+
+  - task: PublishCodeCoverageResults@2
+    displayName: Raport pokrycia kodu
+    condition: succeededOrFailed()
+    inputs:
+      summaryFileLocation: $(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml
+
+  - script: |
+      dotnet list $(solution) package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+      if grep -q "has the following vulnerable packages" vulnerable.txt; then
+        echo "##vso[task.logissue type=error]Znaleziono paczki z podatnościami (szczegóły wyżej)."
+        exit 1
+      fi
+    displayName: Skan bezpieczeństwa paczek NuGet
+
+  - script: dotnet publish $(apiProject) -c $(buildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory)/carrental-api
+    displayName: Publish API
+
+  - task: PublishPipelineArtifact@1
+    displayName: Artefakt do wdrożenia
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/carrental-api
+      artifact: carrental-api
