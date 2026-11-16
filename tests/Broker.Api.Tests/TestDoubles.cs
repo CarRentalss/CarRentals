@@ -1,3 +1,4 @@
+using Broker.Api.Contracts;
 using Broker.Api.Data;
 using Broker.Api.Providers;
 using Microsoft.Data.Sqlite;
@@ -44,6 +45,24 @@ public sealed class FakeProvider(string code, string displayName = "") : ICarRen
         var days = query.EndDate.DayNumber - query.StartDate.DayNumber;
         return new ProviderQuote($"{Code}-offer", query.CarId, 100m, 20m, 120m * days, "PLN",
             query.StartDate, query.EndDate, days, DateTime.UtcNow.AddMinutes(10));
+    }
+
+    public async Task<ProviderRental> CreateRentalAsync(RentalOrder order, CancellationToken cancellationToken)
+    {
+        await SimulateAsync(cancellationToken);
+        return new ProviderRental($"{Code}-rental", RentalStatus.Pending);
+    }
+
+    public async Task<ProviderRental?> GetRentalAsync(string rentalId, CancellationToken cancellationToken)
+    {
+        await SimulateAsync(cancellationToken);
+        return new ProviderRental(rentalId, RentalStatus.Confirmed);
+    }
+
+    public async Task<ProviderRental> RequestReturnAsync(string rentalId, string email, CancellationToken cancellationToken)
+    {
+        await SimulateAsync(cancellationToken);
+        return new ProviderRental(rentalId, RentalStatus.ReturnRequested);
     }
 
     private async Task SimulateAsync(CancellationToken cancellationToken)

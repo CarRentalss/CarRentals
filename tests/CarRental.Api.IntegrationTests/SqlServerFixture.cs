@@ -45,7 +45,7 @@ public sealed class SqlServerFixture : IAsyncLifetime
 
     /// <summary>Nazwa bazy, na której pracuje kontekst.</summary>
     public static string DatabaseName(CarRentalDbContext db) =>
-        new SqlConnectionStringBuilder(db.Database.GetConnectionString()).InitialCatalog;
+        new SqlConnectionStringBuilder(db.Database.GetConnectionString()!).InitialCatalog;
 
     // To samo co InitializeDatabaseAsync w Program.cs: jak są migracje, to Migrate, a jak nie ma, to EnsureCreated
     private static async Task CreateSchemaAsync(CarRentalDbContext db)

@@ -29,6 +29,18 @@ public sealed class BrokerEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetHealth_Anonymous_HasSecurityHeaders()
+    {
+        using var client = _factory.CreateBrowserClient();
+
+        using var response = await client.GetAsync("/health");
+
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Contains("frame-ancestors 'none'", response.Headers.GetValues("Content-Security-Policy").Single(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GetCars_DefaultPaging_ReturnsFiveOfTwelveWithApiKeySent()
     {
         using var client = _factory.CreateBrowserClient();
@@ -231,6 +243,7 @@ public sealed class BrokerEndpointTests : IAsyncLifetime
     [Theory]
     [InlineData("https://evil.example.com/")]
     [InlineData("//evil.example.com")]
+    [InlineData("/\t/evil.example.com")]
     public async Task GetLogin_ExternalReturnUrl_RedirectsToLocalRoot(string returnUrl)
     {
         using var client = _factory.CreateBrowserClient();

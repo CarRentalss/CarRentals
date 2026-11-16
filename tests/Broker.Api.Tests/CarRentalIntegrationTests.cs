@@ -249,6 +249,46 @@ public sealed class CarRentalIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PostRentals_ThroughBroker_CreatesPendingRentalVisibleForEmployee()
+    {
+        using var client = _broker.CreateBrowserClient();
+        await BrokerApiFactory.LoginAsync(client, "jan");
+        var quote = await (await client.PostAsJsonAsync("/api/v1/offers", new
+        {
+            provider = "our",
+            carId = "3",
+            startDate = Today.AddDays(14),
+            endDate = Today.AddDays(16),
+            age = 30,
+            licenseYears = 8,
+            location = "Warszawa"
+        })).Content.ReadFromJsonAsync<QuoteResult>(BrokerApiFactory.Json);
+        var quoteId = Assert.Single(quote!.Offers).QuoteId;
+
+        using var response = await client.PostAsJsonAsync("/api/v1/rentals", new
+        {
+            quoteId,
+            firstName = "Jan",
+            lastName = "Kowalski",
+            email = "jan.kowalski@example.com"
+        });
+        var mine = await client.GetFromJsonAsync<List<RentalResponse>>("/api/v1/rentals", BrokerApiFactory.Json);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var rental = await response.Content.ReadFromJsonAsync<RentalResponse>(BrokerApiFactory.Json);
+        Assert.Equal(RentalStatus.Pending, rental!.Status);
+        // Proces w tle jest w tym teście wyłączony, więc status zostaje Pending także po odświeżeniu
+        Assert.Equal(RentalStatus.Pending, Assert.Single(mine!).Status);
+
+        using var employee = _broker.CreateBrowserClient();
+        await BrokerApiFactory.LoginAsync(employee, "anna", "Employee");
+        var list = await employee.GetFromJsonAsync<List<EmployeeRentalListItem>>("/api/v1/employee/rentals", BrokerApiFactory.Json);
+        var item = Assert.Single(list!);
+        Assert.Equal(rental.ProviderRentalId, item.RentalId.ToString());
+        Assert.Equal("Jan Kowalski", item.CustomerName);
+    }
+
+    [Fact]
     public async Task GetEmployeeRentals_UnknownRental_Returns404FromCarRentalApi()
     {
         using var client = _broker.CreateBrowserClient();

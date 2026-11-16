@@ -70,10 +70,12 @@ if (!builder.Environment.IsEnvironment("Testing"))
 }
 
 // ---------- Wypożyczalnie (Adapter + Registry + Aggregator) ----------
-builder.Services.AddHttpClient<OurCarRentalClient>(ConfigureOurApi);
-builder.Services.AddHttpClient<OurEmployeeClient>(ConfigureOurApi);
-builder.Services.AddTransient<ICarRentalProvider>(sp => sp.GetRequiredService<OurCarRentalClient>());
-// KM3: tutaj dochodzą klienci API prowadzącego i innej grupy (kolejne ICarRentalProvider)
+builder.Services.AddCarRentalProvider<OurCarRentalClient>(providers => providers.Our);
+// KM3: nowy dostawca to nowa klasa ICarRentalProvider i jedna linia tutaj, np.
+// builder.Services.AddCarRentalProvider<LecturerCarRentalClient>(providers => providers.Lecturer);
+// plus adres i klucz w Providers:Lecturer i IsEnabled = 1 w tabeli Providers.
+builder.Services.AddHttpClient<OurEmployeeClient>((services, http) =>
+    ProviderRegistration.ConfigureClient(http, services.GetRequiredService<IOptions<ProvidersOptions>>().Value.Our));
 builder.Services.AddScoped<IProviderRegistry, ProviderRegistry>();
 builder.Services.AddSingleton<ProviderAggregator>();
 
@@ -82,6 +84,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<CatalogService>();
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<QuoteService>();
+builder.Services.AddScoped<RentalService>();
 builder.Services.AddHostedService<QuoteCleanupWorker>();
 
 // ---------- Logowanie i autoryzacja ----------
@@ -96,7 +99,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Broker API",
         Version = "v1",
-        Description = "Broker (BFF) dla frontu Car Rentals: katalog i wycena ze wszystkich wypożyczalni, logowanie, profil, panel pracownika. " +
+        Description = "Broker (BFF) dla frontu Car Rentals: katalog i wycena ze wszystkich wypożyczalni, wynajem, logowanie, profil, panel pracownika. " +
             "Logowanie przez ciasteczko (/api/v1/auth/login, lokalnie /api/v1/auth/dev-login). POST/PUT/DELETE wymagają nagłówka X-CSRF: 1."
     });
 
@@ -130,6 +133,7 @@ await InitializeDatabaseAsync(app);
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -170,19 +174,6 @@ app.MapFallback("/api/{**path}", context =>
 app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
-
-// Adres i limit czasu naszego Car Rental API (Providers:Our)
-static void ConfigureOurApi(IServiceProvider services, HttpClient http)
-{
-    var settings = services.GetRequiredService<IOptions<ProvidersOptions>>().Value.Our;
-    if (settings.IsConfigured)
-    {
-        // Ukośnik na końcu, żeby ścieżki względne (api/v1/...) doklejały się do adresu
-        http.BaseAddress = new Uri(settings.BaseUrl!.TrimEnd('/') + "/");
-    }
-
-    http.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
-}
 
 // Tworzy bazę przy starcie (lokalnie). Gdy są migracje, używa migracji, a jak jeszcze ich nie ma, tworzy bazę z modelu.
 static async Task InitializeDatabaseAsync(WebApplication app)

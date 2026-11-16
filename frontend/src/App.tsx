@@ -10,24 +10,28 @@ import { LandingPage } from './pages/LandingPage'
 import { NotFound } from './pages/NotFound'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { MyRentalsPage } from './pages/rentals/MyRentalsPage'
+import { RentalStatusPage } from './pages/rentals/RentalStatusPage'
 import { SearchPage } from './pages/SearchPage'
 
 function Layout() {
   const { error } = useAuth()
   return (
     <div className="layout">
+      <a className="skip-link" href="#tresc">
+        Przejdź do treści
+      </a>
       <Navbar />
-      <main className="container">
-        {error && (
-          <div className="alert alert--warn">Nie udało się sprawdzić logowania: {error}</div>
-        )}
+      <main className="container" id="tresc" tabIndex={-1}>
+        {error && <div className="alert alert--warn">Nie udało się sprawdzić logowania: {error}</div>}
         <Outlet />
       </main>
       <footer className="footer">
         <div className="container">
           <span>
-            Car Rentals, projekt zespołowy 2026
-            {import.meta.env.VITE_APP_VERSION && <span className="muted"> · wersja {import.meta.env.VITE_APP_VERSION}</span>}
+            <span className="footer__brand">Car Rentals</span>
+            Porównanie ofert wynajmu aut, projekt zespołowy 2026
+            {import.meta.env.VITE_APP_VERSION && <>, wersja {import.meta.env.VITE_APP_VERSION}</>}
           </span>
           <Link to="/privacy">Polityka prywatności i ciasteczka</Link>
         </div>
@@ -49,6 +53,22 @@ export function App() {
           element={
             <RequireAuth>
               <ProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="rentals"
+          element={
+            <RequireAuth>
+              <MyRentalsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="rentals/:rentalId"
+          element={
+            <RequireAuth>
+              <RentalStatusPage />
             </RequireAuth>
           }
         />

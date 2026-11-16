@@ -48,7 +48,7 @@ AZURE_AD_BROKER_SECRET="${AZURE_AD_BROKER_SECRET:-}"
 if [ -z "$LOC" ]; then
   echo "Podaj region, np.: bash setup-resources.sh polandcentral jkm"
   echo "Dozwolone regiony w tej subskrypcji:"
-  az policy assignment list --query "[].{name:displayName, params:parameters}" -o json || true
+  az policy assignment list --disable-scope-strict-match --query "[].{name:displayName, params:parameters}" -o json || true
   exit 1
 fi
 

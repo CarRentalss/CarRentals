@@ -8,6 +8,7 @@ namespace Broker.Api.Background;
 /// <summary>
 /// Sprzątanie w tle: co kilka minut usuwa oferty, które wygasły dawno temu (domyślnie ponad 24 h).
 /// Oferta jest ważna 10 minut, więc dłużej nie jest potrzebna (część punktu "clear data", reszta w KM3).
+/// Wynajmy zostają: mają kopię danych z oferty, a klucz do oferty baza ustawia na NULL (OnDelete SetNull).
 /// </summary>
 public sealed class QuoteCleanupWorker(
     IServiceScopeFactory scopeFactory,

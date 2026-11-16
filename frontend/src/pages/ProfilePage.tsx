@@ -5,6 +5,7 @@ import type { ProfileResponse, UpdateProfileRequest } from '../api/types'
 import { useApi } from '../api/useApi'
 import { useAuth } from '../auth/useAuth'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { LoginAgain } from '../components/LoginAgain'
 import { Spinner } from '../components/Spinner'
 import { PROFILE_FIELD_LABELS, formatDateTime, todayIso } from '../format'
 
@@ -19,13 +20,19 @@ export function ProfilePage() {
 
   return (
     <>
-      <h1>Mój profil</h1>
-      {loaded.loading && <Spinner label="Wczytujemy profil..." />}
+      <header className="page-head">
+        <h1>Mój profil</h1>
+        <p>Dane kierowcy, z których wypełniamy wycenę i wniosek o wynajem.</p>
+      </header>
+      {loaded.loading && <Spinner label="Wczytujemy profil…" />}
       <ErrorMessage message={loaded.error} onRetry={loaded.reload} />
+      <LoginAgain status={loaded.errorStatus} />
       {profile && (
         <>
           {profile.isComplete ? (
-            <div className="alert alert--success">Profil jest kompletny. Dane wypełnimy automatycznie przy wycenie.</div>
+            <div className="alert alert--success">
+              Profil jest kompletny. Dane wypełnimy automatycznie przy wycenie.
+            </div>
           ) : (
             <div className="alert alert--warn">
               Uzupełnij brakujące dane: {profile.missingFields.map((f) => PROFILE_FIELD_LABELS[f] ?? f).join(', ')}. Są
@@ -104,15 +111,40 @@ function ProfileForm({ profile, onSaved, onEdit }: ProfileFormProps) {
   const today = todayIso()
 
   return (
-    <form className="card form form--grid" onSubmit={onSubmit} aria-label="Dane profilu">
+    <form className="panel form form--grid profile-form" onSubmit={onSubmit} aria-label="Dane profilu">
       <Field label="Imię" missing={missing.has('firstName')} error={fieldError('firstName')}>
-        <input type="text" required maxLength={100} value={form.firstName} onChange={(e) => set('firstName')(e.target.value)} />
+        <input
+          type="text"
+          name="firstName"
+          autoComplete="given-name"
+          required
+          maxLength={100}
+          value={form.firstName}
+          onChange={(e) => set('firstName')(e.target.value)}
+        />
       </Field>
       <Field label="Nazwisko" missing={missing.has('lastName')} error={fieldError('lastName')}>
-        <input type="text" required maxLength={100} value={form.lastName} onChange={(e) => set('lastName')(e.target.value)} />
+        <input
+          type="text"
+          name="lastName"
+          autoComplete="family-name"
+          required
+          maxLength={100}
+          value={form.lastName}
+          onChange={(e) => set('lastName')(e.target.value)}
+        />
       </Field>
       <Field label="Email" missing={missing.has('email')} error={fieldError('email')}>
-        <input type="email" required maxLength={254} value={form.email} onChange={(e) => set('email')(e.target.value)} />
+        <input
+          type="email"
+          name="email"
+          autoComplete="email"
+          spellCheck={false}
+          required
+          maxLength={254}
+          value={form.email}
+          onChange={(e) => set('email')(e.target.value)}
+        />
       </Field>
       <Field
         label="Data urodzenia"
@@ -120,7 +152,14 @@ function ProfileForm({ profile, onSaved, onEdit }: ProfileFormProps) {
         error={fieldError('dateOfBirth')}
         hint={profile.age != null ? `Wiek: ${profile.age} lat` : undefined}
       >
-        <input type="date" max={today} value={form.dateOfBirth} onChange={(e) => set('dateOfBirth')(e.target.value)} />
+        <input
+          type="date"
+          name="dateOfBirth"
+          autoComplete="bday"
+          max={today}
+          value={form.dateOfBirth}
+          onChange={(e) => set('dateOfBirth')(e.target.value)}
+        />
       </Field>
       <Field
         label="Data uzyskania prawa jazdy"
@@ -136,7 +175,14 @@ function ProfileForm({ profile, onSaved, onEdit }: ProfileFormProps) {
         />
       </Field>
       <Field label="Lokalizacja (miasto)" missing={missing.has('location')} error={fieldError('location')}>
-        <input type="text" maxLength={100} value={form.location} onChange={(e) => set('location')(e.target.value)} />
+        <input
+          type="text"
+          name="location"
+          autoComplete="address-level2"
+          maxLength={100}
+          value={form.location}
+          onChange={(e) => set('location')(e.target.value)}
+        />
       </Field>
       <p className="muted small full">
         Trzymamy datę urodzenia i datę prawa jazdy, a wiek i staż liczymy na dziś, bo zmieniają się z czasem.
@@ -149,7 +195,7 @@ function ProfileForm({ profile, onSaved, onEdit }: ProfileFormProps) {
       )}
       <div className="actions">
         <button type="submit" className="btn btn--primary" disabled={busy}>
-          {busy ? 'Zapisujemy...' : 'Zapisz'}
+          {busy ? 'Zapisujemy…' : 'Zapisz'}
         </button>
       </div>
     </form>
@@ -173,7 +219,7 @@ function Field({ label, missing, error, hint, children }: FieldProps) {
         {missing && <small className="field__missing"> (brakuje)</small>}
       </span>
       {children}
-      {hint && <span className="muted small">{hint}</span>}
+      {hint && <span className="field__hint">{hint}</span>}
       {error && <span className="field__error">{error}</span>}
     </label>
   )

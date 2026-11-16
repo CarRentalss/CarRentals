@@ -158,41 +158,52 @@ stages:
           # Jeden plik wykonywalny na bazę. W Deploy aktualizuje bazę (stosuje tylko brakujące migracje).
           # Obok idempotentny skrypt SQL do podglądu albo ręcznego uruchomienia.
           # Oba API mają IDesignTimeDbContextFactory, więc dotnet ef nie odpala Program.cs.
+          # Bundle budujemy zawsze, żeby od pierwszego przebiegu było widać, że narzędzia EF działają.
+          # Dopóki w repo nie ma migracji, błąd bundla jest tylko ostrzeżeniem, a Deploy i tak go nie uruchomi.
           - script: dotnet tool restore
             displayName: dotnet tool restore (dotnet-ef)
-            condition: and(succeeded(), or(eq(variables['detect.hasCarRentalMigrations'], 'true'), eq(variables['detect.hasBrokerMigrations'], 'true')))
 
           - script: |
-              set -e
-              mkdir -p $(Build.ArtifactStagingDirectory)/efbundles
-              dotnet ef migrations bundle \
-                --project $(carRentalApiProject) --startup-project $(carRentalApiProject) \
-                --context $(carRentalDbContext) --configuration $(buildConfiguration) \
-                --self-contained --target-runtime linux-x64 --force \
-                --output $(Build.ArtifactStagingDirectory)/efbundles/efbundle-carrental
-              dotnet ef migrations script --idempotent \
-                --project $(carRentalApiProject) --startup-project $(carRentalApiProject) \
-                --context $(carRentalDbContext) --configuration $(buildConfiguration) \
-                --output $(Build.ArtifactStagingDirectory)/efbundles/carrental-idempotent.sql
-            displayName: Bundle migracji CarRental DB
-            condition: and(succeeded(), eq(variables['detect.hasCarRentalMigrations'], 'true'))
-            env:
-              ASPNETCORE_ENVIRONMENT: Development
+              OUT="$(Build.ArtifactStagingDirectory)/efbundles"
+              mkdir -p "$OUT"
+              echo "Build $(Build.BuildNumber). Bundle stosuje tylko brakujące migracje: ./efbundle-<baza> --connection \"<connection string>\"" > "$OUT/README.txt"
+              failed=0
 
-          - script: |
-              set -e
-              mkdir -p $(Build.ArtifactStagingDirectory)/efbundles
-              dotnet ef migrations bundle \
-                --project $(brokerApiProject) --startup-project $(brokerApiProject) \
-                --context $(brokerDbContext) --configuration $(buildConfiguration) \
-                --self-contained --target-runtime linux-x64 --force \
-                --output $(Build.ArtifactStagingDirectory)/efbundles/efbundle-broker
-              dotnet ef migrations script --idempotent \
-                --project $(brokerApiProject) --startup-project $(brokerApiProject) \
-                --context $(brokerDbContext) --configuration $(buildConfiguration) \
-                --output $(Build.ArtifactStagingDirectory)/efbundles/broker-idempotent.sql
-            displayName: Bundle migracji Broker DB
-            condition: and(succeeded(), eq(variables['detect.hasBrokerMigrations'], 'true'))
+              # $1 projekt, $2 kontekst, $3 nazwa pliku, $4 czy w repo są migracje (true/false)
+              build_bundle() {
+                local project="$1" context="$2" name="$3" hasMigrations="$4"
+                echo "=== $context (migracje w repo: $hasMigrations) ==="
+                if dotnet ef migrations bundle \
+                     --project "$project" --startup-project "$project" \
+                     --context "$context" --configuration $(buildConfiguration) \
+                     --self-contained --target-runtime linux-x64 --force \
+                     --output "$OUT/efbundle-$name"; then
+                  if [ "$hasMigrations" = "true" ]; then
+                    dotnet ef migrations script --idempotent \
+                      --project "$project" --startup-project "$project" \
+                      --context "$context" --configuration $(buildConfiguration) \
+                      --output "$OUT/$name-idempotent.sql" || failed=1
+                  else
+                    echo "$context: bundle jest, ale bez migracji (nic nie zmieni w bazie). Migracje: scripts/add-migrations.ps1" | tee -a "$OUT/README.txt"
+                  fi
+                elif [ "$hasMigrations" = "true" ]; then
+                  failed=1
+                else
+                  echo "##vso[task.logissue type=warning]$context: bundle się nie zbudował, ale w repo nie ma jeszcze migracji, więc tylko ostrzegam."
+                fi
+              }
+
+              build_bundle "$(carRentalApiProject)" "$(carRentalDbContext)" carrental "$(detect.hasCarRentalMigrations)"
+              if [ "$(detect.hasBroker)" = "true" ]; then
+                build_bundle "$(brokerApiProject)" "$(brokerDbContext)" broker "$(detect.hasBrokerMigrations)"
+              fi
+
+              ls -la "$OUT"
+              if [ "$failed" -ne 0 ]; then
+                echo "##vso[task.logissue type=error]Bundle albo skrypt migracji nie zbudował się, a migracje są w repo."
+                exit 1
+              fi
+            displayName: Bundle migracji EF (CarRental DB i Broker DB)
             env:
               ASPNETCORE_ENVIRONMENT: Development
 
@@ -212,7 +223,6 @@ stages:
 
           - task: PublishPipelineArtifact@1
             displayName: 'Artefakt: efbundles (bundle migracji + skrypty SQL)'
-            condition: and(succeeded(), or(eq(variables['detect.hasCarRentalMigrations'], 'true'), eq(variables['detect.hasBrokerMigrations'], 'true')))
             inputs:
               targetPath: $(Build.ArtifactStagingDirectory)/efbundles
               artifact: efbundles

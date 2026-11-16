@@ -11,6 +11,7 @@ const STATUS_MESSAGES: Record<number, string> = {
   403: 'Nie masz uprawnień do tej strony.',
   404: 'Nie znaleziono.',
   409: 'Operacja nie jest teraz możliwa.',
+  410: 'Oferta wygasła. Sprawdź cenę jeszcze raz.',
   500: 'Błąd serwera. Spróbuj ponownie za chwilę.',
   502: 'Serwer nie odpowiada. Spróbuj ponownie za chwilę.',
   503: 'Usługa chwilowo niedostępna. Spróbuj ponownie za chwilę.',
