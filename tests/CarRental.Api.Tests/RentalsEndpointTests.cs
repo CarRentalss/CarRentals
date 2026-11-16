@@ -14,14 +14,14 @@ public class RentalsEndpointTests
         var client = factory.CreateBrokerClient();
         var offer = await TestApi.CreateOfferAsync(client);
 
-        var response = await client.PostAsJsonAsync("/rentals", TestApi.RentalBody(offer.OfferId));
+        var response = await client.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(offer.OfferId));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var rental = await response.Content.ReadFromJsonAsync<RentalStatusChangedResponse>(CarRentalApiFactory.Json);
         Assert.NotNull(rental);
         Assert.Equal(RentalStatus.Pending, rental.Status);
         Assert.NotNull(response.Headers.Location);
-        Assert.EndsWith($"/rentals/{rental.RentalId}", response.Headers.Location.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith($"/api/v1/rentals/{rental.RentalId}", response.Headers.Location.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class RentalsEndpointTests
         var client = factory.CreateBrokerClient();
         var offer = await TestApi.CreateOfferAsync(client);
 
-        var response = await client.PostAsJsonAsync("/rentals", TestApi.RentalBody(offer.OfferId, email: "to-nie-jest-email"));
+        var response = await client.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(offer.OfferId, email: "to-nie-jest-email"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -42,7 +42,7 @@ public class RentalsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/rentals", TestApi.RentalBody(Guid.NewGuid()));
+        var response = await client.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(Guid.NewGuid()));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -55,7 +55,7 @@ public class RentalsEndpointTests
         var offer = await TestApi.CreateOfferAsync(client);
 
         factory.Clock.Advance(TimeSpan.FromMinutes(11));
-        var response = await client.PostAsJsonAsync("/rentals", TestApi.RentalBody(offer.OfferId));
+        var response = await client.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(offer.OfferId));
 
         Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
     }
@@ -68,7 +68,7 @@ public class RentalsEndpointTests
         var offer = await TestApi.CreateOfferAsync(client);
 
         factory.Clock.Advance(TimeSpan.FromMinutes(9));
-        var response = await client.PostAsJsonAsync("/rentals", TestApi.RentalBody(offer.OfferId));
+        var response = await client.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(offer.OfferId));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
@@ -81,7 +81,7 @@ public class RentalsEndpointTests
         var offer = await TestApi.CreateOfferAsync(client);
         await TestApi.CreateRentalAsync(client, offer.OfferId);
 
-        var response = await client.PostAsJsonAsync("/rentals", TestApi.RentalBody(offer.OfferId));
+        var response = await client.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(offer.OfferId));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -97,7 +97,7 @@ public class RentalsEndpointTests
         var secondOffer = await TestApi.CreateOfferAsync(otherBroker);
 
         await TestApi.CreateRentalAsync(ourBroker, firstOffer.OfferId);
-        var response = await otherBroker.PostAsJsonAsync("/rentals", TestApi.RentalBody(secondOffer.OfferId));
+        var response = await otherBroker.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(secondOffer.OfferId));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -110,7 +110,7 @@ public class RentalsEndpointTests
         var otherBroker = factory.CreateBrokerClient(CarRentalApiFactory.OtherBrokerKey);
         var offer = await TestApi.CreateOfferAsync(ourBroker);
 
-        var response = await otherBroker.PostAsJsonAsync("/rentals", TestApi.RentalBody(offer.OfferId));
+        var response = await otherBroker.PostAsJsonAsync("/api/v1/rentals", TestApi.RentalBody(offer.OfferId));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -123,9 +123,9 @@ public class RentalsEndpointTests
         var offer = await TestApi.CreateOfferAsync(client);
         var created = await TestApi.CreateRentalAsync(client, offer.OfferId);
 
-        var before = await client.GetFromJsonAsync<RentalStatusResponse>($"/rentals/{created.RentalId}", CarRentalApiFactory.Json);
+        var before = await client.GetFromJsonAsync<RentalStatusResponse>($"/api/v1/rentals/{created.RentalId}", CarRentalApiFactory.Json);
         await factory.ConfirmPendingRentalsAsync();
-        var after = await client.GetFromJsonAsync<RentalStatusResponse>($"/rentals/{created.RentalId}", CarRentalApiFactory.Json);
+        var after = await client.GetFromJsonAsync<RentalStatusResponse>($"/api/v1/rentals/{created.RentalId}", CarRentalApiFactory.Json);
 
         Assert.Equal(RentalStatus.Pending, before!.Status);
         Assert.Equal(RentalStatus.Confirmed, after!.Status);
@@ -143,7 +143,7 @@ public class RentalsEndpointTests
         var offer = await TestApi.CreateOfferAsync(ourBroker);
         var created = await TestApi.CreateRentalAsync(ourBroker, offer.OfferId);
 
-        var response = await otherBroker.GetAsync($"/rentals/{created.RentalId}");
+        var response = await otherBroker.GetAsync($"/api/v1/rentals/{created.RentalId}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -154,7 +154,7 @@ public class RentalsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.GetAsync($"/rentals/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/api/v1/rentals/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -166,7 +166,7 @@ public class RentalsEndpointTests
         var client = factory.CreateBrokerClient();
         var rentalId = await TestApi.CreateConfirmedRentalAsync(factory, client);
 
-        var response = await client.PostAsJsonAsync($"/rentals/{rentalId}/return", new { email = "JAN.KOWALSKI@example.com" });
+        var response = await client.PostAsJsonAsync($"/api/v1/rentals/{rentalId}/return", new { email = "JAN.KOWALSKI@example.com" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<RentalStatusChangedResponse>(CarRentalApiFactory.Json);
@@ -180,7 +180,7 @@ public class RentalsEndpointTests
         var client = factory.CreateBrokerClient();
         var rentalId = await TestApi.CreateConfirmedRentalAsync(factory, client);
 
-        var response = await client.PostAsJsonAsync($"/rentals/{rentalId}/return", new { email = "ktos.inny@example.com" });
+        var response = await client.PostAsJsonAsync($"/api/v1/rentals/{rentalId}/return", new { email = "ktos.inny@example.com" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -193,7 +193,7 @@ public class RentalsEndpointTests
         var offer = await TestApi.CreateOfferAsync(client);
         var created = await TestApi.CreateRentalAsync(client, offer.OfferId);
 
-        var response = await client.PostAsJsonAsync($"/rentals/{created.RentalId}/return", new { email = "jan.kowalski@example.com" });
+        var response = await client.PostAsJsonAsync($"/api/v1/rentals/{created.RentalId}/return", new { email = "jan.kowalski@example.com" });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -204,9 +204,9 @@ public class RentalsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
         var rentalId = await TestApi.CreateConfirmedRentalAsync(factory, client);
-        await client.PostAsJsonAsync($"/rentals/{rentalId}/return", new { email = "jan.kowalski@example.com" });
+        await client.PostAsJsonAsync($"/api/v1/rentals/{rentalId}/return", new { email = "jan.kowalski@example.com" });
 
-        var response = await client.PostAsJsonAsync($"/rentals/{rentalId}/return", new { email = "jan.kowalski@example.com" });
+        var response = await client.PostAsJsonAsync($"/api/v1/rentals/{rentalId}/return", new { email = "jan.kowalski@example.com" });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }

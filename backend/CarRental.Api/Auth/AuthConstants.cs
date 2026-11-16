@@ -14,6 +14,9 @@ public static class AuthConstants
     public const string DevEmployeeHeader = "X-Dev-Employee";
     public const string DevRolesHeader = "X-Dev-Roles";
 
+    /// <summary>Poza Development bez AzureAd: panel pracownika zamknięty (patrz DisabledAuthenticationHandler).</summary>
+    public const string DisabledEmployeeScheme = "EmployeeDisabled";
+
     public const string BrokerClaim = "broker";
     public const string EmployeeRole = "Employee";
 

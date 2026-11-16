@@ -58,7 +58,7 @@ public sealed class OfferService(
             return ServiceError.NotFound("Nie znaleziono samochodu.");
         }
 
-        if (!string.Equals(car.Location, location, StringComparison.OrdinalIgnoreCase))
+        if (!car.IsAvailableIn(location))
         {
             return ServiceError.Validation("location", $"Ten samochód można odebrać tylko w lokalizacji: {car.Location}.");
         }
