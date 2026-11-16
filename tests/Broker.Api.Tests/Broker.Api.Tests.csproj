@@ -20,6 +20,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetPackagesVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(AspNetPackagesVersion)" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="$(PkcsVersion)" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="$(CryptoXmlVersion)" />
   </ItemGroup>
 
   <ItemGroup>
