@@ -155,7 +155,7 @@ public static class TestApi
 
     public static async Task<OfferResponse> CreateOfferAsync(HttpClient client, object? body = null)
     {
-        var response = await client.PostAsJsonAsync("/offers", body ?? OfferBody());
+        var response = await client.PostAsJsonAsync("/api/v1/offers", body ?? OfferBody());
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<OfferResponse>(CarRentalApiFactory.Json))!;
     }
@@ -170,7 +170,7 @@ public static class TestApi
 
     public static async Task<RentalStatusChangedResponse> CreateRentalAsync(HttpClient client, Guid offerId, string email = "jan.kowalski@example.com")
     {
-        var response = await client.PostAsJsonAsync("/rentals", RentalBody(offerId, email));
+        var response = await client.PostAsJsonAsync("/api/v1/rentals", RentalBody(offerId, email));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<RentalStatusChangedResponse>(CarRentalApiFactory.Json))!;
     }

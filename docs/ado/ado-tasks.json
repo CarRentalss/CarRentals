@@ -1,0 +1,170 @@
+[
+  {
+    "parentId": 142,
+    "title": "Podzielić azure-pipelines.yml na etapy Build, Test, Deploy",
+    "description": "Nowy YAML z trzema etapami. Build buduje .NET i React, Test odpala testy z pokryciem, Deploy jest za przełącznikiem deployToAzure, dopóki nie ma zasobów w Azure.",
+    "activity": "Development",
+    "originalEstimate": 3,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 142,
+    "title": "Dodać wersjonowanie 1.2.N",
+    "description": "Numer builda $(Major).$(Minor).$(Rev:r), ten sam numer idzie do -p:Version i do APP_VERSION na App Service. Na KM3 zmieniamy Minor na 3.",
+    "activity": "Development",
+    "originalEstimate": 1,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 142,
+    "title": "Naprawić skan podatnych paczek",
+    "description": "Build #3 padł na skanie, bo Microsoft.Data.SqlClient ciągnie System.Security.Cryptography.Pkcs 9.0.11 (GHSA-846f-f764-76mx). Dodajemy jawną referencję do poprawionej wersji (PkcsVersion w Directory.Build.props) w obu API. Skan zostaje i dalej przerywa build.",
+    "activity": "Development",
+    "originalEstimate": 1,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 142,
+    "title": "Ustawić ruleset dla main i develop na GitHubie",
+    "description": "Ruleset main i develop: zakaz usuwania i force push, PR z 1 approve, dismiss stale, conversation resolution, tylko merge commit, wymagany check Jagna676.CarRentals. Do tego collaborators z rolą Write i Dependabot alerts. Kroki w docs/github-ruleset.md. Zrzut ekranu na demo.",
+    "activity": "Deployment",
+    "originalEstimate": 1,
+    "assignee": "Jagna Jażdżyk"
+  },
+  {
+    "parentId": 142,
+    "title": "Napisać główny README",
+    "description": "README w katalogu repo: opis, uruchomienie lokalne, jak pracujemy z Gitem, wersje, konwencja tras /api/v1, dostęp dla innej grupy, wzorce, testy, CI/CD.",
+    "activity": "Documentation",
+    "originalEstimate": 2,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 143,
+    "title": "Założyć zasoby w rg-carrentals",
+    "description": "Skrypt scripts/azure/setup-resources.sh w Cloud Shell: plan B1, dwa App Service .NET 10, Azure SQL z dwiema bazami Basic, App Insights, tożsamość dla ADO. Region z polityki subskrypcji.",
+    "activity": "Deployment",
+    "originalEstimate": 2,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 143,
+    "title": "Utworzyć service connection sc-azure-carrentals, environment dev i variable group carrentals-dev",
+    "description": "Service connection przez workload identity federation z managed identity id-carrentals-ado. Environment dev z Branch control na main. W variable group connection stringi do obu baz jako secret.",
+    "activity": "Deployment",
+    "originalEstimate": 1,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 143,
+    "title": "Dodać migrację InitialCreate",
+    "description": "Migracje dla CarRentalDbContext i BrokerDbContext skryptem scripts/add-migrations.ps1 (.NET 10 SDK albo Docker). Seed 12 aut wchodzi do migracji. Usunąć lokalną bazę utworzoną wcześniej przez EnsureCreated.",
+    "activity": "Development",
+    "originalEstimate": 1,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 143,
+    "title": "Włączyć etap Deploy i sprawdzić /health",
+    "description": "deployToAzure na true, Permit przy pierwszym przebiegu. Sprawdzić log migracji, /health obu aplikacji, Swagger, APP_VERSION i tabelę Cars w Query editor.",
+    "activity": "Testing",
+    "originalEstimate": 1,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 84,
+    "title": "Dodać endpoint wyszukiwania w Broker API z równoległym pytaniem wypożyczalni",
+    "description": "OurCarRentalClient (x-api-key), ProviderRegistry, ProviderAggregator z Task.WhenAll i limitem 15 s, CatalogService z cache. Endpointy GET /api/v1/cars, /api/v1/cars/makes, /api/v1/cars/{provider}/{carId}.",
+    "activity": "Development",
+    "originalEstimate": 4,
+    "assignee": "Jagna Jażdżyk"
+  },
+  {
+    "parentId": 84,
+    "title": "Zrobić stronę główną z wyszukiwaniem w React",
+    "description": "LandingPage z krótkim opisem i wyborem marki i modelu z /api/v1/cars/makes, SearchPage z filtrami i stronicowaniem po 5.",
+    "activity": "Development",
+    "originalEstimate": 4,
+    "assignee": "Karolina Strzelecka"
+  },
+  {
+    "parentId": 84,
+    "title": "Dodać testy integracyjne Broker z Car Rental API",
+    "description": "Testy (min. 2), w których Broker woła prawdziwe Car Rental API uruchomione w pamięci (WebApplicationFactory), plus unit testy agregatora: timeout 15 s, pominięcie wolnej wypożyczalni, brak ofert.",
+    "activity": "Testing",
+    "originalEstimate": 2,
+    "assignee": "Jagna Jażdżyk"
+  },
+  {
+    "parentId": 101,
+    "title": "Zrobić widok listy wynajmów w panelu pracownika",
+    "description": "Strona panelu w React z listą wynajmów naszej firmy (auto, klient, daty, status, cena) i szczegółami po kliknięciu. Dane z GET /api/v1/employee/rentals przez Brokera.",
+    "activity": "Development",
+    "originalEstimate": 4,
+    "assignee": "Karolina Strzelecka"
+  },
+  {
+    "parentId": 101,
+    "title": "Dodać filtr po statusie",
+    "description": "Filtr aktywne (Confirmed) i do odbioru (ReturnRequested), parametr status w zapytaniu do Brokera.",
+    "activity": "Development",
+    "originalEstimate": 1,
+    "assignee": "Karolina Strzelecka"
+  },
+  {
+    "parentId": 101,
+    "title": "Sprawdzić ręcznie z kontem z rolą Employee",
+    "description": "Lista i szczegóły z kontem z rolą Employee, 403 dla konta bez roli. Lokalnie przez dev-login z rolą Employee.",
+    "activity": "Testing",
+    "originalEstimate": 1,
+    "assignee": "Karolina Strzelecka"
+  },
+  {
+    "parentId": 117,
+    "title": "Zmienić trasy na /api/v1",
+    "description": "Prefiks /api/v1 w kontrolerach Car Rental API (cars, offers, rentals, employee/rentals) i w testach, /health bez prefiksu. Aktualizacja kontraktu z KM1 (AB#26), Swaggera i README. Ta sama konwencja w Broker API.",
+    "activity": "Development",
+    "originalEstimate": 2,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 141,
+    "title": "Konfiguracja EF w osobnych plikach i indeksy",
+    "description": "Konfiguracja tylko fluent w Data/Configurations (CarConfiguration, OfferConfiguration, RentalConfiguration) przez ApplyConfigurationsFromAssembly, podział Entities.cs na pliki. Nowe indeksy Rentals(Status, CreatedAtUtc) i Offers(ExpiresAtUtc). Robimy przed InitialCreate.",
+    "activity": "Development",
+    "originalEstimate": 2,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 141,
+    "title": "Testy DB na SQL Server",
+    "description": "Osobny projekt tests/CarRental.Api.IntegrationTests z Testcontainers.MsSql. Min. 3 testy: migracje i seed 12 aut, unikalny OfferId blokuje drugi wynajem, Status zapisany jako tekst, Restrict blokuje usunięcie auta z ofertami. Projekt w CarRentals.sln, pipeline odpala go na agencie z Dockerem.",
+    "activity": "Testing",
+    "originalEstimate": 3,
+    "assignee": "Maksymilian Paczyński"
+  },
+  {
+    "parentId": 120,
+    "title": "Kolekcja Postman",
+    "description": "Kolekcja docs/postman/CarRentals.postman_collection.json z environmentem local: lista aut, oferta, wynajem, status po 10 s, zwrot, potwierdzenie zwrotu jako pracownik. Testy w zakładce Tests. Odpalić lokalnie w Runnerze, zrzut ekranu.",
+    "activity": "Testing",
+    "originalEstimate": 2,
+    "assignee": "Karolina Strzelecka"
+  },
+  {
+    "parentId": 15,
+    "title": "Decisions & risks KM2",
+    "description": "Jedna strona na checkpoint: 2 decyzje w formie ADR-lite (React w Brokerze zamiast Static Web Apps, GitHub z Boards i Pipelines w ADO) i najważniejsze ryzyka z mitygacją. Plik docs/decisions-risks-km2.md i slajd.",
+    "activity": "Documentation",
+    "originalEstimate": 1,
+    "assignee": "Karolina Strzelecka"
+  },
+  {
+    "parentId": 119,
+    "title": "Test suite w ADO",
+    "description": "Test Plan KM2 Car Rental API, suite Feature: katalog aut i oferty z test case'ami TC1-TC12 dla #117, #118, #119 (docs/ado/test-cases.md). Jeden Run z wynikami. Jak Test Plans wymaga triala, trial od 20.11 i suite na KM3.",
+    "activity": "Testing",
+    "originalEstimate": 3,
+    "assignee": "Karolina Strzelecka"
+  }
+]

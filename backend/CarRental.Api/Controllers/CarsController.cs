@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CarRental.Api.Controllers;
 
 /// <summary>Katalog aut dla brokerów.</summary>
-[Route("cars")]
+[Route("api/v1/cars")]
 [Authorize(Policy = AuthConstants.BrokerPolicy)]
 public sealed class CarsController(CarCatalogService catalog) : ApiControllerBase
 {

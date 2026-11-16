@@ -39,7 +39,7 @@ public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILo
             return ServiceError.NotFound("Nie znaleziono oferty.");
         }
 
-        if (now > offer.ExpiresAtUtc)
+        if (offer.IsExpired(now))
         {
             return ServiceError.Gone("Oferta wygasła. Poproś o nową ofertę.");
         }
@@ -59,22 +59,8 @@ public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILo
             return ServiceError.Conflict("Samochód został już wynajęty w tym terminie.");
         }
 
-        var rental = new Rental
-        {
-            Id = Guid.NewGuid(),
-            OfferId = offer.Id,
-            CarId = offer.CarId,
-            StartDate = offer.StartDate,
-            EndDate = offer.EndDate,
-            TotalPrice = offer.TotalPrice,
-            FirstName = request.FirstName!.Trim(),
-            LastName = request.LastName!.Trim(),
-            Email = request.Email!.Trim(),
-            Status = RentalStatus.Pending,
-            BrokerName = brokerName,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now
-        };
+        // Warunki (termin, cena) przechodzą z oferty do wynajmu
+        var rental = offer.CreateRental(request.FirstName!, request.LastName!, request.Email!, now);
 
         db.Rentals.Add(rental);
 
@@ -118,7 +104,7 @@ public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILo
             return ServiceError.NotFound("Nie znaleziono wynajmu.");
         }
 
-        if (!string.Equals(rental.Email, email.Trim(), StringComparison.OrdinalIgnoreCase))
+        if (!rental.HasCustomerEmail(email))
         {
             return ServiceError.Forbidden("Adres e-mail nie pasuje do tego wynajmu.");
         }
@@ -128,15 +114,12 @@ public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILo
             return ServiceError.Conflict("Zwrot został już zgłoszony.");
         }
 
-        if (rental.Status != RentalStatus.Confirmed)
+        if (!rental.CanRequestReturn)
         {
             return ServiceError.Conflict($"Nie można zgłosić zwrotu dla wynajmu w statusie {rental.Status}.");
         }
 
-        var now = clock.GetUtcNow().UtcDateTime;
-        rental.Status = RentalStatus.ReturnRequested;
-        rental.ReturnRequestedAtUtc = now;
-        rental.UpdatedAtUtc = now;
+        rental.RequestReturn(clock.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync(cancellationToken);
 
         return new RentalStatusChangedResponse(rental.Id, rental.Status);
@@ -158,17 +141,7 @@ public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILo
 
         foreach (var rental in pending)
         {
-            if (rental.Car.IsActive)
-            {
-                rental.Status = RentalStatus.Confirmed;
-            }
-            else
-            {
-                rental.Status = RentalStatus.Rejected;
-                rental.Reason = "Samochód został wycofany z floty.";
-            }
-
-            rental.UpdatedAtUtc = now;
+            rental.Process(rental.Car.IsActive, now);
         }
 
         if (pending.Count > 0)
