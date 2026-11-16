@@ -79,3 +79,27 @@ Automat: OffersEndpointTests.CreateOffer_CarAlreadyRentedInThatTerm_Returns409, 
 Uwaga do TC12: po kroku 2 auto 2 jest zajęte od D do D+3 w tej bazie. Przy ponownym przebiegu użyj innego auta z Warszawy (np. 3 albo 9) albo postaw bazę od nowa (docker compose down -v).
 
 Suite jest pełny, gdy każda story feature'a ma co najmniej jeden test case i wszystkie test case'y są wykonane w jednym Run z wynikiem.
+
+## Dodatkowo: wynajem przez Brokera w UI (osobny suite "Wynajem przez Brokera")
+
+Warunki: docker compose up --build, aplikacja http://localhost:5100, logowanie dev (Klient albo Pracownik w menu). Pracownika najlepiej w oknie incognito.
+
+## TC13 Wynajem z oferty i potwierdzenie
+1. Akcja: zalogować się jako Klient, uzupełnić profil, wejść w auto Skoda Octavia (Warszawa), Sprawdź ceny. Oczekiwane: oferta z ceną i przyciskiem Wynajmij.
+2. Akcja: Wynajmij. Oczekiwane: formularz z imieniem, nazwiskiem i emailem z profilu.
+3. Akcja: Potwierdź wynajem. Oczekiwane: ekran statusu "Czeka na potwierdzenie", po około 10 s sam zmienia się na "Potwierdzone".
+4. Akcja: Moje wypożyczenia. Oczekiwane: wynajem na liście ze statusem Potwierdzone i przyciskiem Zgłoś zwrot.
+Automat: RentalEndpointTests.PostRentals_OwnQuote_Returns202PendingAndSavesRental, GetRentals_PendingRental_RefreshesStatusFromCarRentalApi, CarRentalIntegrationTests.PostRentals_ThroughBroker_CreatesPendingRentalVisibleForEmployee
+
+## TC14 Zwrot zgłoszony przez klienta i potwierdzony przez pracownika
+1. Akcja: w Moich wypożyczeniach Zgłoś zwrot przy wynajmie z TC13. Oczekiwane: status "Zwrot zgłoszony", przycisk znika.
+2. Akcja: jako Pracownik Panel pracownika, filtr Do odbioru. Oczekiwane: ten wynajem z danymi klienta.
+3. Akcja: Szczegóły, notatka i plik jpg, potwierdzenie zwrotu. Oczekiwane: status Zakończone.
+4. Akcja: jako Klient odświeżyć Moje wypożyczenia. Oczekiwane: status "Zakończone".
+Automat: RentalEndpointTests.PostReturn_ConfirmedRental_SendsCustomerEmailAndReturnsReturnRequested, PostReturn_RentalStillPending_Returns409
+
+## TC15 Wynajem bez logowania, cudza i wygasła oferta
+1. Akcja: bez logowania Sprawdź ceny i Wynajmij. Oczekiwane: przejście do logowania, po zalogowaniu powrót na stronę auta.
+2. Akcja: POST /api/v1/rentals z quoteId oferty innego użytkownika. Oczekiwane: 404.
+3. Akcja: po 10 minutach od wyceny Wynajmij i Potwierdź wynajem. Oczekiwane: komunikat "Oferta wygasła. Sprawdź cenę jeszcze raz." (410).
+Automat: RentalEndpointTests.PostRentals_QuoteOfAnotherUser_Returns404, PostRentals_AnonymousQuote_Returns404, PostRentals_ExpiredQuote_Returns410, PostRentals_WithoutCsrfHeader_Returns400AndDoesNotCallCarRentalApi

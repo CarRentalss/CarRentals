@@ -26,22 +26,22 @@ export function LandingPage() {
   return (
     <>
       <section className="hero">
-        <h1>Porównaj oferty wynajmu aut w jednym miejscu</h1>
-        <p>
-          Wybierasz auto, podajesz termin, wiek, staż prawa jazdy i miasto, a my pytamy wypożyczalnie o cenę. Wyniki
-          przychodzą najpóźniej po 15 sekundach. Każda oferta pokazuje cenę za dzień, cenę ubezpieczenia i do kiedy jest
-          ważna (co najmniej 10 minut). Szukać można bez logowania, konto jest potrzebne dopiero do wynajmu.
+        <h1>Porównaj oferty wynajmu aut z kilku wypożyczalni naraz</h1>
+        <p className="lead">
+          Wybierz auto i termin, a my zapytamy wypożyczalnie o cenę. Każda oferta pokazuje cenę za dzień, koszt
+          ubezpieczenia i kwotę łączną. Szukać możesz bez konta, logowanie jest potrzebne dopiero do wynajmu.
         </p>
       </section>
 
-      <section className="card">
-        <h2>Zacznij wyszukiwanie</h2>
-        {loading && <Spinner label="Wczytujemy marki..." />}
+      <section className="panel search-panel" aria-labelledby="search-title">
+        <h2 id="search-title">Jakiego auta szukasz?</h2>
+        {loading && <Spinner label="Wczytujemy marki…" />}
         <ErrorMessage message={error} onRetry={reload} />
         <form className="form form--inline" onSubmit={onSubmit}>
           <label>
             Marka
             <select
+              name="make"
               value={make}
               onChange={(e) => {
                 setMake(e.target.value)
@@ -58,8 +58,8 @@ export function LandingPage() {
           </label>
           <label>
             Model
-            <select value={model} onChange={(e) => setModel(e.target.value)} disabled={!make}>
-              <option value="">Wszystkie modele</option>
+            <select name="model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!make}>
+              <option value="">{make ? 'Wszystkie modele' : 'Najpierw wybierz markę'}</option>
               {models.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -73,19 +73,25 @@ export function LandingPage() {
         </form>
       </section>
 
-      <section className="steps">
-        <div className="card">
-          <h3>1. Wybierz auto</h3>
-          <p>Lista aut ze wszystkich podłączonych wypożyczalni, z filtrem po marce, modelu i roku.</p>
-        </div>
-        <div className="card">
-          <h3>2. Sprawdź ceny</h3>
-          <p>Na stronie auta podajesz dane do wyceny. Po zalogowaniu wypełniamy je z profilu.</p>
-        </div>
-        <div className="card">
-          <h3>3. Wynajmij</h3>
-          <p>Wybierasz ofertę i składasz wniosek. Ta część będzie gotowa w kolejnym etapie (KM3).</p>
-        </div>
+      <section className="band steps-band" aria-labelledby="steps-title">
+        <h2 id="steps-title">Jak to działa</h2>
+        <ol className="steps">
+          <li className="step">
+            <h3>Wybierz auto</h3>
+            <p>Przeglądasz auta ze wszystkich podłączonych wypożyczalni i zawężasz listę po marce, modelu i roku.</p>
+          </li>
+          <li className="step">
+            <h3>Sprawdź cenę</h3>
+            <p>
+              Podajesz termin, wiek, staż prawa jazdy i miasto. Odpowiedzi zbieramy najdłużej 15 sekund, a każda oferta
+              jest ważna co najmniej 10 minut.
+            </p>
+          </li>
+          <li className="step">
+            <h3>Wynajmij</h3>
+            <p>Wybierasz ofertę i składasz wniosek. Status i zgłoszenie zwrotu znajdziesz w Moich wypożyczeniach.</p>
+          </li>
+        </ol>
       </section>
     </>
   )

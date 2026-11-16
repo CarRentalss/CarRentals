@@ -1,8 +1,8 @@
 namespace Broker.Api.Domain;
 
 /// <summary>
-/// Oferta otrzymana od wypożyczalni i pokazana użytkownikowi. Zapisujemy ją, żeby w KM3
-/// zrobić z niej wynajem ("Rent me") i żeby wiedzieć, kiedy wygasa.
+/// Oferta otrzymana od wypożyczalni i pokazana użytkownikowi. Zapisujemy ją, żeby zrobić z niej
+/// wynajem ("Wynajmij") i żeby wiedzieć, kiedy wygasa.
 /// </summary>
 public class Quote
 {

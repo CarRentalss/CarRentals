@@ -176,6 +176,7 @@ await InitializeDatabaseAsync(app);
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 
 if (!isLocal)
 {

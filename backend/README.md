@@ -53,7 +53,7 @@ dotnet test tests/CarRental.Api.Tests
 # 2. Testy bazy na SQL Server w kontenerze (potrzebny działający Docker)
 dotnet test tests/CarRental.Api.IntegrationTests
 
-# 3. Start API (w Development baza tworzy się sama przy starcie, z migracji)
+# 3. Start API (w Development baza tworzy się sama przy starcie: z migracji, a dopóki ich nie ma, EnsureCreated)
 dotnet run --project backend/CarRental.Api
 ```
 
@@ -61,7 +61,7 @@ Swagger jest pod adresem http://localhost:5080/swagger. Kliknij Authorize i wpis
 
 ### Migracje EF
 
-Baza ma powstawać z migracji EF (folder `backend/CarRental.Api/Migrations`). Folderu jeszcze nie ma w repo, bo migrację generuje Maks skryptem niżej (tu nie dało się odpalić `dotnet ef`). Seed 12 aut jest w `CarConfiguration` (`HasData`), więc trafia do migracji. Przy starcie w Development API robi `Migrate`, a jak migracji jeszcze nie ma, tworzy bazę z modelu (`EnsureCreated`). Na Azure bazę aktualizuje bundle migracji w etapie Deploy, a nie start aplikacji (`Database__ApplyMigrationsOnStartup=false`).
+Baza ma powstawać z migracji EF (folder `backend/CarRental.Api/Migrations`). Folderu jeszcze nie ma w repo, migrację generuje Maks skryptem niżej. Seed 12 aut jest w `CarConfiguration` (`HasData`), więc trafia do migracji. Przy starcie w Development API robi `Migrate`, a jak migracji jeszcze nie ma, tworzy bazę z modelu (`EnsureCreated`). Na Azure bazę aktualizuje bundle migracji w etapie Deploy, a nie start aplikacji (`Database__ApplyMigrationsOnStartup=false`).
 
 Migrację generujemy skryptem z katalogu repo. Robi ją dla obu baz: CarRental DB (`CarRentalDbContext`) i Broker DB (`BrokerDbContext`, jak projektu Brokera jeszcze nie ma, skrypt go pomija):
 
@@ -124,7 +124,7 @@ Działa to tylko w środowisku Development (i w testach) i tylko wtedy, gdy `Azu
   ApiKeys__Clients__0__Key  = <długi losowy klucz>
   ApiKeys__Clients__1__Name = OtherGroupBroker
   ApiKeys__Clients__1__Key  = <drugi klucz>
-  ConnectionStrings__CarRentalDb = <connection string do Azure SQL>
+  ConnectionStrings__CarRentalDb = <connection string do Azure SQL>   (skrypt Azure ustawia go jako Connection string typu SQLAzure, działa tak samo)
   AzureAd__TenantId = ...
   AzureAd__ClientId = ...
   Database__ApplyMigrationsOnStartup = false
@@ -140,7 +140,7 @@ Działa to tylko w środowisku Development (i w testach) i tylko wtedy, gdy `Azu
 `azure-pipelines.yml` w katalogu głównym robi:
 
 - restore, skan podatnych paczek (`dotnet list package --vulnerable --include-transitive`, przerywa build, gdy coś znajdzie) i build z analizatorami Roslyn,
-- publish API jako artefakt i bundle migracji EF (jak są migracje),
+- publish API jako artefakt i bundle migracji EF (budowany zawsze, ale bez migracji w repo błąd jest tylko ostrzeżeniem, a Deploy go nie uruchamia),
 - testy z raportem pokrycia i progiem 40%,
 - deploy na App Service, ale dopiero po włączeniu `deployToAzure` (czeka na subskrypcję Azure i service connection).
 
@@ -174,5 +174,5 @@ EF konfigurujemy tylko fluent API w `Data/Configurations`, encje w `Domain` nie 
 
 - `IFileStorage` na Azure Blob Storage (prywatny kontener) (#81, #104)
 - Faktura PDF (QuestPDF) i mail po potwierdzeniu zwrotu (#82, #107, #108)
-- Audyt w Brokerze i korelacja Broker do Car Rental API w Application Insights (#39)
+- Korelacja wywołań Broker do Car Rental API w Application Insights (#39)
 - Rejestracja w Entra ID i rola Employee (#58, #100)

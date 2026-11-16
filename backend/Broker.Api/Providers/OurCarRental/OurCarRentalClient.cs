@@ -101,6 +101,83 @@ public sealed class OurCarRentalClient(HttpClient http, IOptions<ProvidersOption
             UtcDateTimeConverter.ToUtc(offer.ExpiresAt));
     }
 
+    public async Task<ProviderRental> CreateRentalAsync(RentalOrder order, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+
+        if (!Guid.TryParse(order.OfferId, out var offerId))
+        {
+            throw new ProviderRejectedException("Nie znaleziono oferty.", StatusCodes.Status404NotFound);
+        }
+
+        using var request = CreateRequest(HttpMethod.Post, "api/v1/rentals");
+        request.Content = JsonContent.Create(
+            new OurCreateRentalDto(offerId, order.FirstName, order.LastName, order.Email),
+            options: Json);
+
+        using var response = await http.SendAsync(request, cancellationToken);
+
+        // 400, 404 (brak oferty), 409 (auto zajęte, oferta wykorzystana), 410 (oferta wygasła) to odmowa
+        if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound
+            or HttpStatusCode.Conflict or HttpStatusCode.Gone)
+        {
+            var message = await ProblemReader.ReadMessageAsync(response, "Wypożyczalnia odrzuciła wniosek.", cancellationToken);
+            throw new ProviderRejectedException(message, (int)response.StatusCode);
+        }
+
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var rental = await response.Content.ReadFromJsonAsync<OurRentalChangedDto>(Json, cancellationToken)
+            ?? throw new InvalidOperationException("Pusta odpowiedź z Car Rental API.");
+        return new ProviderRental(rental.RentalId.ToString(), rental.Status);
+    }
+
+    public async Task<ProviderRental?> GetRentalAsync(string rentalId, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(rentalId, out var id))
+        {
+            return null;
+        }
+
+        using var request = CreateRequest(HttpMethod.Get, $"api/v1/rentals/{id}");
+        using var response = await http.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        await EnsureSuccessAsync(response, cancellationToken);
+        var rental = await response.Content.ReadFromJsonAsync<OurRentalStatusDto>(Json, cancellationToken);
+        return rental is null ? null : new ProviderRental(rental.RentalId.ToString(), rental.Status, rental.Reason);
+    }
+
+    public async Task<ProviderRental> RequestReturnAsync(string rentalId, string email, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(rentalId, out var id))
+        {
+            throw new ProviderRejectedException("Nie znaleziono wynajmu.", StatusCodes.Status404NotFound);
+        }
+
+        using var request = CreateRequest(HttpMethod.Post, $"api/v1/rentals/{id}/return");
+        request.Content = JsonContent.Create(new OurReturnDto(email), options: Json);
+
+        using var response = await http.SendAsync(request, cancellationToken);
+
+        // 403 (inny email), 404, 409 (wynajem nie jest aktywny) to odmowa z komunikatem
+        if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Forbidden
+            or HttpStatusCode.NotFound or HttpStatusCode.Conflict)
+        {
+            var message = await ProblemReader.ReadMessageAsync(response, "Wypożyczalnia odrzuciła zgłoszenie zwrotu.", cancellationToken);
+            throw new ProviderRejectedException(message, (int)response.StatusCode);
+        }
+
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var rental = await response.Content.ReadFromJsonAsync<OurRentalChangedDto>(Json, cancellationToken)
+            ?? throw new InvalidOperationException("Pusta odpowiedź z Car Rental API.");
+        return new ProviderRental(rental.RentalId.ToString(), rental.Status);
+    }
+
     private HttpRequestMessage CreateRequest(HttpMethod method, string path)
     {
         var request = new HttpRequestMessage(method, path);

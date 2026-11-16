@@ -48,6 +48,8 @@ for target in "${TARGETS[@]}"; do
     echo "Pomijam $project: migracja $NAME już jest."
     continue
   fi
+  # dotnet ef sam nie robi restore przed odczytem metadanych projektu
+  COMMANDS+=("dotnet restore $project")
   COMMANDS+=("dotnet ef migrations add $NAME --project $project --startup-project $project --context $context")
   DIRS+=("$dir")
 done
@@ -85,7 +87,7 @@ else
     -e DOTNET_NOLOGO=1 \
     -v "$REPO:/src" \
     -w /src \
-    "$IMAGE" sh -c "$SCRIPT; status=\$?; $CLEANUP exit \$status"
+    "$IMAGE" sh -c "$CLEANUP $SCRIPT; status=\$?; $CLEANUP exit \$status"
 fi
 
 echo

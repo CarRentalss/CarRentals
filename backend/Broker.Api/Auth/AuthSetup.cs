@@ -117,9 +117,11 @@ public static class AuthSetup
             return "/";
         }
 
+        // Znaki sterujące odrzucamy, bo przeglądarka usuwa np. tabulator i z "/\t/evil.com" robi "//evil.com"
         var isLocal = returnUrl.StartsWith('/')
             && !returnUrl.StartsWith("//", StringComparison.Ordinal)
-            && !returnUrl.StartsWith("/\\", StringComparison.Ordinal);
+            && !returnUrl.StartsWith("/\\", StringComparison.Ordinal)
+            && !returnUrl.Any(char.IsControl);
 
         return isLocal ? returnUrl : "/";
     }

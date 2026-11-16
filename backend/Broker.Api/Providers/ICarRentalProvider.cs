@@ -1,3 +1,5 @@
+using Broker.Api.Contracts;
+
 namespace Broker.Api.Providers;
 
 /// <summary>
@@ -21,6 +23,18 @@ public interface ICarRentalProvider
 
     /// <summary>Oferta. Gdy wypożyczalnia odmówi (zajęte auto, zła lokalizacja), rzuca <see cref="ProviderRejectedException"/>.</summary>
     Task<ProviderQuote> CreateOfferAsync(OfferQuery query, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Wniosek o wynajem na podstawie oferty. Wypożyczalnia zwykle odpowiada statusem Pending, wynik sprawdzamy później.
+    /// Odmowa (oferta wygasła albo wykorzystana, auto zajęte) to <see cref="ProviderRejectedException"/> z kodem HTTP.
+    /// </summary>
+    Task<ProviderRental> CreateRentalAsync(RentalOrder order, CancellationToken cancellationToken);
+
+    /// <summary>Aktualny status wynajmu albo null, jak wypożyczalnia go nie zna.</summary>
+    Task<ProviderRental?> GetRentalAsync(string rentalId, CancellationToken cancellationToken);
+
+    /// <summary>Klient zgłasza zwrot. Odmowa (zły status, inny email) to <see cref="ProviderRejectedException"/>.</summary>
+    Task<ProviderRental> RequestReturnAsync(string rentalId, string email, CancellationToken cancellationToken);
 }
 
 /// <summary>Auto we wspólnym modelu Brokera.</summary>
@@ -50,6 +64,12 @@ public sealed record ProviderQuote(
     DateOnly EndDate,
     int Days,
     DateTime ExpiresAtUtc);
+
+/// <summary>Dane do wniosku o wynajem: numer oferty u wypożyczalni i dane kierowcy.</summary>
+public sealed record RentalOrder(string OfferId, string FirstName, string LastName, string Email);
+
+/// <summary>Wynajem u wypożyczalni: jej numer, status i powód odrzucenia (jak jest).</summary>
+public sealed record ProviderRental(string RentalId, RentalStatus Status, string? Reason = null);
 
 /// <summary>Wypożyczalnia odpowiedziała, ale odmówiła (np. 400, 404, 409). Komunikat pokazujemy użytkownikowi.</summary>
 public sealed class ProviderRejectedException : Exception

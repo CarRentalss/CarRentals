@@ -3,6 +3,7 @@ import type {
   CarDetails,
   CarListItem,
   CarSearchParams,
+  CreateRentalRequest,
   EmployeeRentalDetails,
   EmployeeRentalListItem,
   MakeModels,
@@ -11,6 +12,7 @@ import type {
   ProfileResponse,
   QuoteRequest,
   QuoteResult,
+  RentalResponse,
   RentalStatus,
   RentalStatusChangedResponse,
   UpdateProfileRequest,
@@ -45,6 +47,23 @@ export function getCar(provider: string, carId: string, signal?: AbortSignal) {
 // Wycena
 export function createQuote(request: QuoteRequest, signal?: AbortSignal) {
   return api.post<QuoteResult>(`${BASE}/offers`, request, signal)
+}
+
+// Wynajem (Moje wypożyczenia)
+export function createRental(request: CreateRentalRequest) {
+  return api.post<RentalResponse>(`${BASE}/rentals`, request)
+}
+
+export function getMyRentals(signal?: AbortSignal) {
+  return api.get<RentalResponse[]>(`${BASE}/rentals`, signal)
+}
+
+export function getMyRental(rentalId: string, signal?: AbortSignal) {
+  return api.get<RentalResponse>(`${BASE}/rentals/${encodeURIComponent(rentalId)}`, signal)
+}
+
+export function requestReturn(rentalId: string) {
+  return api.post<RentalResponse>(`${BASE}/rentals/${encodeURIComponent(rentalId)}/return`)
 }
 
 // Logowanie

@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Broker.Api.Services;
 
-// Kopia wzorca z CarRental.Api (na KM2 bez wspólnego projektu), plus 401 i 503 dla wywołań wypożyczalni.
+// Kopia wzorca z CarRental.Api (na KM2 bez wspólnego projektu), plus 401, 410 i 503 dla wywołań wypożyczalni.
 
 /// <summary>Rodzaj błędu biznesowego. Kontroler zamienia go na kod HTTP z kontraktu.</summary>
 public enum ServiceErrorType
@@ -12,6 +12,7 @@ public enum ServiceErrorType
     Forbidden,    // 403
     NotFound,     // 404
     Conflict,     // 409
+    Gone,         // 410 (np. oferta wygasła)
     Unavailable   // 503 (wypożyczalnia nie odpowiada albo zwróciła błąd)
 }
 
@@ -22,6 +23,7 @@ public sealed record ServiceError(ServiceErrorType Type, string Message, string?
     public static ServiceError Forbidden(string message) => new(ServiceErrorType.Forbidden, message);
     public static ServiceError NotFound(string message) => new(ServiceErrorType.NotFound, message);
     public static ServiceError Conflict(string message) => new(ServiceErrorType.Conflict, message);
+    public static ServiceError Gone(string message) => new(ServiceErrorType.Gone, message);
     public static ServiceError Unavailable(string message) => new(ServiceErrorType.Unavailable, message);
 }
 
