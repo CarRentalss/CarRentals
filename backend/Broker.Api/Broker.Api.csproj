@@ -25,6 +25,7 @@
     <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.*" />
     <!-- SqlClient ciągnie podatną wersję Pkcs (ta sama sprawa co w CarRental.Api), wymuszamy poprawioną -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="$(PkcsVersion)" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="$(CryptoXmlVersion)" />
   </ItemGroup>
 
   <ItemGroup>
