@@ -74,7 +74,7 @@ public sealed class EmployeeRentalService(CarRentalDbContext db, IFileStorage st
             return ServiceError.NotFound("Nie znaleziono wynajmu.");
         }
 
-        if (rental.Status != RentalStatus.ReturnRequested)
+        if (!rental.CanConfirmReturn)
         {
             return ServiceError.Conflict($"Zwrot można potwierdzić tylko po zgłoszeniu zwrotu. Obecny status: {rental.Status}.");
         }
@@ -91,15 +91,13 @@ public sealed class EmployeeRentalService(CarRentalDbContext db, IFileStorage st
             key = await storage.SaveAsync(content, validation.Value.Extension, cancellationToken);
         }
 
-        var now = clock.GetUtcNow().UtcDateTime;
-        rental.Status = RentalStatus.Completed;
-        rental.CompletedAtUtc = now;
-        rental.UpdatedAtUtc = now;
-        rental.CompletedBy = employeeName;
-        rental.ReturnNote = note.Trim();
-        rental.AttachmentKey = key;
-        rental.AttachmentContentType = validation.Value.ContentType;
-        rental.AttachmentFileName = Path.GetFileName(file.FileName);
+        rental.CompleteReturn(
+            employeeName,
+            note,
+            key,
+            validation.Value.ContentType,
+            Path.GetFileName(file.FileName),
+            clock.GetUtcNow().UtcDateTime);
 
         await db.SaveChangesAsync(cancellationToken);
 

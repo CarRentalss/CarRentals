@@ -436,3 +436,30 @@ TestResults/
 coverage*/
 App_Data/
 appsettings.*.local.json
+# .NET
+launchSettings.local.json
+# Lokalne ustawienia i sekrety (sekrety trzymamy w User Secrets, App Settings i ADO Library)
+appsettings.local.json
+.env
+.env.*
+!.env.example
+# Pliki aplikacji tworzone w czasie działania (załączniki, lokalna baza)
+**/App_Data/
+# Testy i pokrycie
+coverage/
+test-results/
+# Bundle migracji EF (budowany w pipeline)
+efbundle*
+*-idempotent.sql
+# Frontend (React + Vite)
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# React kopiowany do Brokera przy buildzie (pipeline robi to sam)
+backend/Broker.Api/wwwroot/
+# System
+.DS_Store
+Thumbs.db
