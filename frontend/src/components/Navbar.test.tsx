@@ -43,12 +43,17 @@ describe('Navbar i AuthContext', () => {
     expect(screen.queryByRole('link', { name: 'Panel pracownika' })).not.toBeInTheDocument()
   })
 
-  it('niezalogowany widzi Zaloguj i wyszarzone Moje wypożyczenia (KM3)', async () => {
+  it('zalogowany widzi link Moje wypożyczenia', async () => {
+    renderNavbar(customer)
+
+    expect(await screen.findByRole('link', { name: 'Moje wypożyczenia' })).toHaveAttribute('href', '/rentals')
+  })
+
+  it('niezalogowany widzi Zaloguj, bez Moich wypożyczeń i Profilu', async () => {
     renderNavbar(anonymousMe)
 
     expect(await screen.findByRole('button', { name: 'Zaloguj' })).toBeInTheDocument()
-    expect(screen.getByText(/Moje wypożyczenia/)).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByText('(KM3)')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Moje wypożyczenia' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Panel pracownika' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Profil' })).not.toBeInTheDocument()
   })

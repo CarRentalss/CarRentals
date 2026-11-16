@@ -18,7 +18,7 @@ flowchart TB
       carapi["Car Rental API<br/>.NET 10, /api/v1"]
       worker["Potwierdzanie wynajmów<br/>(BackgroundService)"]
     end
-    brokerdb[("Azure SQL<br/>sqldb-broker<br/>Providers, UserProfiles, Quotes")]
+    brokerdb[("Azure SQL<br/>sqldb-broker<br/>Providers, UserProfiles, Quotes, Rentals")]
     cardb[("Azure SQL<br/>sqldb-carrental<br/>Cars, Offers, Rentals")]
     appi["Application Insights<br/>appi-carrentals"]
   end
@@ -68,19 +68,19 @@ flowchart TB
 - Broker API (BFF): logowanie (Entra ID przez OIDC, lokalnie dev-login), profil, katalog z cache, wycena z limitem 15 s, proxy panelu pracownika. Woła nasze Car Rental API przez HTTP z kluczem `x-api-key` (broker OurBroker).
 - Car Rental API: katalog, oferty, wynajmy (202 Pending, potwierdzenie w tle po około 10 s), zwroty, panel pracownika z rolą Employee. Broker innej grupy łączy się swoim kluczem (OtherGroupBroker) i widzi tylko swoje dane.
 - Dwie bazy Azure SQL (Basic): sqldb-carrental i sqldb-broker. Schemat z migracji EF, aktualizowany przez pipeline (EF migrations bundle) przed wdrożeniem kodu. Migracje generuje Maks skryptem `scripts/add-migrations.ps1`, lokalnie te same bazy są w docker compose.
-- Application Insights: Car Rental API wysyła requesty, zależności i logi audytu (bez kluczy i z maskowaniem danych osobowych), gdy jest ustawione `APPLICATIONINSIGHTS_CONNECTION_STRING`. Broker ma na razie audyt tylko w logu, podpięcie do Application Insights robimy w KM3.
+- Application Insights: Car Rental API wysyła requesty, zależności i logi audytu (bez kluczy i z maskowaniem danych osobowych), gdy jest ustawione `APPLICATIONINSIGHTS_CONNECTION_STRING`. Broker tak samo (`UseAzureMonitor`, audyt przez zwykły log). Korelację wywołań Broker do Car Rental API w jednym widoku sprawdzamy w KM3.
 - CI/CD: GitHub (ruleset na main i develop, ustawia Jaga) i Azure Pipelines (Build, Test, Deploy). Deploy przez service connection sc-azure-carrentals włączamy zmienną `deployToAzure`, jak będą zasoby.
 
 ## KM3
 
 - API prowadzącego i API innej grupy jako kolejne adaptery `ICarRentalProvider` w Brokerze (dostawcy są już w tabeli Providers, wyłączeni).
-- Wynajem przez Brokera (Rent Me), historia wynajmów użytkownika.
 - Blob Storage na załączniki zwrotu i faktury (`BlobFileStorage` za interfejsem `IFileStorage`).
 - Maile przez Azure Communication Services Email, przetwarzanie w tle przez Service Bus.
 
 ## Gdzie są dane osobowe
 
 - Broker DB, tabela UserProfiles: imię, nazwisko, email, data urodzenia, data prawa jazdy, lokalizacja. Czyta tylko zalogowany użytkownik (swój profil).
+- Broker DB, tabela Rentals: imię, nazwisko i email kierowcy z wniosku o wynajem. Czyta tylko właściciel wynajmu (Moje wypożyczenia).
 - CarRental DB, tabela Rentals: imię, nazwisko i email z wniosku o wynajem. Czyta broker, który złożył wniosek (tylko status), i pracownik naszej wypożyczalni (rola Employee).
 - Logi audytu: email i nazwiska maskowane, klucze, tokeny i ciasteczka pomijane.
 

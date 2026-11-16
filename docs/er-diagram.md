@@ -78,6 +78,9 @@ erDiagram
 erDiagram
   Providers ||--o{ Quotes : "ProviderId, Restrict"
   UserProfiles |o--o{ Quotes : "UserProfileId null, SetNull"
+  Providers ||--o{ Rentals : "ProviderId, Restrict"
+  UserProfiles ||--o{ Rentals : "UserProfileId, Restrict"
+  Quotes |o--o| Rentals : "QuoteId null, UX, SetNull"
 
   Providers {
     int Id PK
@@ -113,9 +116,30 @@ erDiagram
     datetime2 ExpiresAtUtc "IX"
     datetime2 CreatedAtUtc
   }
+  Rentals {
+    uniqueidentifier Id PK
+    uniqueidentifier UserProfileId FK "IX"
+    uniqueidentifier QuoteId FK "UX, null"
+    int ProviderId FK
+    nvarchar_100 ProviderRentalId
+    nvarchar_100 ProviderCarId
+    nvarchar_200 CarLabel
+    date StartDate
+    date EndDate
+    decimal_10_2 TotalPrice
+    nchar_3 Currency
+    nvarchar_100 FirstName
+    nvarchar_100 LastName
+    nvarchar_254 Email
+    nvarchar_20 Status "tekst"
+    nvarchar_500 Reason "null"
+    datetime2 CreatedAtUtc
+    datetime2 UpdatedAtUtc
+  }
 ```
 
 - Seed: 3 wypożyczalnie (our włączona, lecturer i other-group wyłączone do KM3). Adresy i klucze API nie są w bazie, tylko w konfiguracji.
 - Profil trzyma daty (urodzenia, prawa jazdy), a nie wiek i staż. Wiek i staż liczymy na dzień wyceny.
 - Quotes to oferty pokazane użytkownikowi. Usunięcie profilu nie usuwa ofert (SetNull), wypożyczalni z ofertami nie da się usunąć (Restrict).
 - Indeksy: unikalny EntraObjectId (profil szukany po oid z tokena), unikalny Code, Quotes(UserProfileId) i Quotes(ExpiresAtUtc) do sprzątania w tle.
+- Rentals to wynajmy złożone przez Brokera. Kopiują auto, termin i cenę z oferty, bo stare oferty usuwa sprzątanie w tle (wtedy QuoteId robi się NULL, wynajem zostaje). Rentals(UserProfileId) pod "Moje wypożyczenia", unikalny QuoteId, żeby jednej oferty nie wynająć dwa razy. Profilu z wynajmami nie da się usunąć (Restrict).

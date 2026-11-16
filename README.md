@@ -2,9 +2,9 @@
 
 Aplikacja webowa do wyszukiwania i porównywania ofert wynajmu aut z kilku wypożyczalni. Projekt na przedmiot "Tworzenie aplikacji webowych z wykorzystaniem .NET" (PW, 2026).
 
-Użytkownik wyszukuje auto bez logowania, sprawdza ceny u wypożyczalni, a po zalogowaniu ma profil, z którego wycena bierze dane. Pracownik naszej wypożyczalni ma panel z wynajmami naszej firmy. Oprócz aplikacji pośredniczącej (Broker) mamy własne Car Rental API, czyli naszą wypożyczalnię, z której korzysta nasz Broker i Broker innej grupy.
+Użytkownik wyszukuje auto bez logowania, sprawdza ceny u wypożyczalni, a po zalogowaniu ma profil, z którego wycena bierze dane, może wynająć auto z oferty i zgłosić zwrot w Moich wypożyczeniach. Pracownik naszej wypożyczalni ma panel z wynajmami naszej firmy i potwierdza w nim zwroty. Oprócz aplikacji pośredniczącej (Broker) mamy własne Car Rental API, czyli naszą wypożyczalnię, z której korzysta nasz Broker i Broker innej grupy.
 
-Stan na KM2 (19.11.2026): w kodzie są React, Broker API, Car Rental API, dwie bazy (EF, konfiguracja fluent, seed), panel pracownika (lista i szczegóły) i pipeline z etapami Build, Test i Deploy. Migracje generujemy skryptem (opis niżej), a deploy na Azure włączamy, jak będą zasoby i service connection. W KM3 dochodzą: wynajem przez Brokera (Rent Me), maile do klientów, pliki w Azure Blob, API prowadzącego (czekamy na dokumentację) i API innej grupy.
+Stan na KM2 (19.11.2026): w kodzie są React, Broker API, Car Rental API, dwie bazy (EF, konfiguracja fluent, seed), wynajem przez Brokera (Wynajmij, status, Moje wypożyczenia, zgłoszenie zwrotu), panel pracownika (lista, szczegóły, potwierdzenie zwrotu) i pipeline z etapami Build, Test i Deploy. Migracje InitialCreate obu baz są w repo, a deploy na Azure włączamy, jak będą zasoby i service connection. W KM3 dochodzą: maile do klientów, pliki w Azure Blob, API prowadzącego (czekamy na dokumentację) i API innej grupy.
 
 ## Architektura
 
@@ -24,7 +24,7 @@ CarRental DB (Azure SQL)
 - React (Vite + TypeScript) woła tylko `/api/v1/...` Brokera. Broker serwuje zbudowany React z `wwwroot`, więc front i API są na jednej domenie i ciasteczko sesji jest first-party.
 - Broker loguje użytkownika (Microsoft.Identity.Web, OIDC), trzyma profil i wyceny w Broker DB i pyta wypożyczalnie równolegle z limitem 15 s.
 - Car Rental API to nasza wypożyczalnia: katalog, oferty, wynajmy, zwroty, panel pracownika. Brokerzy łączą się kluczem `x-api-key`, każdy ma swój.
-- Car Rental API wysyła telemetrię do Application Insights, gdy jest ustawione `APPLICATIONINSIGHTS_CONNECTION_STRING`. Broker na razie zapisuje audyt tylko do zwykłego logu, Application Insights podpinamy w nim w KM3.
+- Car Rental API wysyła telemetrię do Application Insights, gdy jest ustawione `APPLICATIONINSIGHTS_CONNECTION_STRING`. Broker robi to samo (też `UseAzureMonitor`, audyt idzie przez zwykły log). Lokalnie i w testach tej zmiennej nie ma, więc nic nie jest wysyłane.
 
 Diagram komponentów z podziałem na KM2 i KM3: [docs/architecture.md](docs/architecture.md). Diagram ER obu baz: [docs/er-diagram.md](docs/er-diagram.md). Decyzje i ryzyka: [docs/decisions-risks-km2.md](docs/decisions-risks-km2.md).
 
@@ -38,7 +38,7 @@ frontend/                         React + TypeScript (Vite), build do frontend/d
 tests/
   CarRental.Api.Tests/            testy jednostkowe i integracyjne endpointów (WebApplicationFactory, SQLite w pamięci)
   CarRental.Api.IntegrationTests/ testy bazy na prawdziwym SQL Server (Testcontainers)
-  Broker.Api.Tests/               testy Brokera (agregator, profil, integracja z Car Rental API)
+  Broker.Api.Tests/               testy Brokera (agregator, profil, wynajem, integracja z Car Rental API)
 docs/                             architektura, diagram ER, kontrakt Brokera, Postman, teksty do ADO, demo
 scripts/
   add-migrations.ps1, .sh         generowanie migracji EF dla obu baz
@@ -63,6 +63,16 @@ docker compose up --build
 - SQL Server: localhost,1433, użytkownik `sa`, hasło z `SQL_SA_PASSWORD` (domyślnie `Local_dev_Passw0rd!`, tylko lokalnie)
 
 Bazy CarRentalDb i BrokerDb tworzą się same przy starcie (w Development API robi Migrate, a jak w projekcie nie ma jeszcze migracji, EnsureCreated). Po dodaniu migracji usuń stare bazy: `docker compose down -v`.
+
+Jak port 1433 zajmuje lokalny SQL Server, w PowerShell `$env:SQL_PORT=14330` przed `docker compose up` (w bashu `SQL_PORT=14330 docker compose up --build`).
+
+Szybkie sprawdzenie całości (Windows, drugi terminal, po starcie kontenerów):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+```
+
+Skrypt czeka na `/health` obu API, potem sprawdza katalog, ofertę, wynajem z potwierdzeniem w tle, Brokera z Reactem, wycenę, wynajem przez Brokera jako zwykły użytkownik (dev-login bez roli, czekanie na Confirmed), dev-login pracownika, profil i to, że pracownik widzi ten wynajem w panelu. Na końcu wypisuje liczbę OK i BLAD.
 
 Logowanie lokalnie działa bez Entra ID (dev-login): przycisk Zaloguj w aplikacji albo np. http://localhost:5100/api/v1/auth/dev-login?name=anna&role=Employee&returnUrl=/employee/rentals (pracownik). Działa tylko w Development.
 
@@ -90,7 +100,7 @@ ConnectionStrings__BrokerDb="Server=localhost,1433;Database=BrokerDb;User Id=sa;
 
 ### Migracje EF
 
-Migracje mają być w domyślnych folderach `backend/CarRental.Api/Migrations` (CarRentalDbContext) i `backend/Broker.Api/Migrations` (BrokerDbContext). Generujemy je skryptem, który robi to dla obu baz (pierwszą, InitialCreate, odpala Maks i commituje foldery):
+Migracje mają być w domyślnych folderach `backend/CarRental.Api/Migrations` (CarRentalDbContext) i `backend/Broker.Api/Migrations` (BrokerDbContext). Generujemy je skryptem, który robi to dla obu baz (InitialCreate już jest w repo, kolejne robimy tak samo):
 
 ```powershell
 # Windows, przez Dockera (nie trzeba .NET 10 SDK)
@@ -257,7 +267,7 @@ Pipeline Jagna676.CarRentals w ADO uruchamia się przy każdym PR do develop i m
 - Test: `dotnet test` całej solucji (też testy bazy w Testcontainers, agent ubuntu-latest ma Dockera), raport pokrycia (coverlet) w zakładce Code Coverage, próg pokrycia liniami 40% (`minCoverage`), testy frontu (Vitest) w zakładce Tests.
 - Deploy (tylko z main, environment `dev`): migracje obu baz przez bundle, Car Rental API i Broker API (z Reactem) na App Service, `APP_VERSION`, smoke test `GET /health`.
 
-Deploy włącza zmienna `deployToAzure` (warunek przy kompilacji YAML). Na razie jest `'false'`, bo wymaga service connection `sc-azure-carrentals`, variable group `carrentals-dev` i environment `dev`. Zasoby Azure i kolejność kroków: [scripts/azure/README.md](scripts/azure/README.md).
+Deploy włącza zmienna `deployToAzure` (warunek przy kompilacji YAML). Migracje w Deploy idą tylko wtedy, gdy są w repo, więc najpierw commit folderów Migrations, potem włączenie deployu. Na razie jest `'false'`, bo wymaga service connection `sc-azure-carrentals`, variable group `carrentals-dev` i environment `dev`. Zasoby Azure i kolejność kroków: [scripts/azure/README.md](scripts/azure/README.md).
 
 Sekrety (klucze brokerów, connection stringi, client secret Entra) są w ustawieniach App Service, w ADO Library i lokalnie w User Secrets. W repo są tylko klucze deweloperskie z końcówką "change-me".
 

@@ -12,16 +12,20 @@ interface RequireAuthProps {
 export function RequireAuth({ children, employee = false }: RequireAuthProps) {
   const { me, loading, login, devLogin } = useAuth()
 
-  if (loading) return <Spinner label="Sprawdzamy logowanie..." />
+  if (loading) return <Spinner label="Sprawdzamy logowanie…" />
 
   if (!me.isAuthenticated) {
     return (
-      <section className="card">
+      <section className="notice">
         <h1>Wymagane logowanie</h1>
         <p>Ta strona jest dostępna po zalogowaniu.</p>
         {me.authMode === 'DevLogin' ? (
           <div className="actions">
-            <button type="button" className="btn btn--primary" onClick={() => devLogin(employee ? 'Employee' : 'Customer', window.location.pathname)}>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => devLogin(employee ? 'Employee' : 'Customer', window.location.pathname)}
+            >
               Zaloguj (dev) jako {employee ? 'pracownik' : 'klient'}
             </button>
           </div>
@@ -38,7 +42,7 @@ export function RequireAuth({ children, employee = false }: RequireAuthProps) {
 
   if (employee && !me.isEmployee) {
     return (
-      <section className="card">
+      <section className="notice">
         <h1>Brak dostępu</h1>
         <p>Panel pracownika jest tylko dla pracowników naszej wypożyczalni.</p>
       </section>

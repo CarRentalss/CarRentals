@@ -27,8 +27,8 @@ export function CookieBanner() {
   return (
     <div className="cookie-banner" role="region" aria-label="Informacja o ciasteczkach">
       <p>
-        Używamy tylko niezbędnych ciasteczek: sesja logowania i zabezpieczenie formularzy. Nie mamy ciasteczek
-        reklamowych ani analitycznych. Szczegóły w <Link to="/privacy">polityce prywatności</Link>.
+        Używamy tylko niezbędnych ciasteczek: sesja logowania i, na czas logowania, ciasteczka Microsoft. Nie mamy
+        ciasteczek reklamowych ani analitycznych. Szczegóły w <Link to="/privacy">polityce prywatności</Link>.
       </p>
       <button
         type="button"

@@ -51,11 +51,25 @@ export function todayIso(offsetDays = 0): string {
   return `${y}-${m}-${d}`
 }
 
+/** "1 dzień", "3 dni". */
+export function daysLabel(days: number): string {
+  return days === 1 ? '1 dzień' : `${days} dni`
+}
+
 export const STATUS_LABELS: Record<RentalStatus, string> = {
   Pending: 'Oczekuje na potwierdzenie',
   Confirmed: 'Aktywne',
   Rejected: 'Odrzucone',
   ReturnRequested: 'Do odbioru',
+  Completed: 'Zakończone',
+}
+
+/** Statusy z punktu widzenia klienta (Moje wypożyczenia). */
+export const CUSTOMER_STATUS_LABELS: Record<RentalStatus, string> = {
+  Pending: 'Czeka na potwierdzenie',
+  Confirmed: 'Potwierdzone',
+  Rejected: 'Odrzucone',
+  ReturnRequested: 'Zwrot zgłoszony',
   Completed: 'Zakończone',
 }
 

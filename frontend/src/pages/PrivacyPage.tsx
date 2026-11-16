@@ -1,6 +1,6 @@
 export function PrivacyPage() {
   return (
-    <article className="card prose">
+    <article className="prose">
       <h1>Polityka prywatności i ciasteczka</h1>
       <p>
         Car Rentals to projekt studencki. Zbieramy tylko dane potrzebne do wyceny i wynajmu auta. Nie sprzedajemy ich i
@@ -12,7 +12,7 @@ export function PrivacyPage() {
         <li>Imię, nazwisko i email z konta, którym się logujesz (Microsoft Entra ID).</li>
         <li>Datę urodzenia, datę uzyskania prawa jazdy i miasto, jeśli wpiszesz je w profilu. Na ich podstawie liczymy wiek i staż do wyceny.</li>
         <li>Wyceny (oferty) z wypożyczalni. Stare wyceny usuwamy automatycznie po 24 godzinach.</li>
-        <li>Przy wynajmie (od KM3) przekazujemy wypożyczalni imię, nazwisko i email, bo bez tego nie przyjmie wniosku.</li>
+        <li>Przy wynajmie przekazujemy wypożyczalni imię, nazwisko i email, bo bez tego nie przyjmie wniosku. U nas zostaje historia wypożyczeń (auto, termin, kwota, status i te dane kierowcy).</li>
       </ul>
       <p>
         Wyszukiwanie i wycena działają bez logowania. Wtedy wiek, staż i miasto idą tylko do wyceny i nie zapisujemy ich w

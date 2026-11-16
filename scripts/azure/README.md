@@ -26,7 +26,7 @@ Koszt: około 23 USD miesięcznie (B1 około 13 USD i dwie bazy Basic po około 
 1. Azure for Students na koncie PW: https://azure.microsoft.com/free/students, "Start free", weryfikacja mailem uczelnianym.
 2. Dozwolone regiony: portal, Policy, Assignments, "Allowed resource deployment regions", parametr Allowed locations. Albo w Cloud Shell:
    ```bash
-   az policy assignment list --query "[].{name:displayName, params:parameters}" -o json
+   az policy assignment list --disable-scope-strict-match --query "[].{name:displayName, params:parameters}" -o json
    ```
 3. Bierzemy pierwszy z tej kolejności, który jest na liście: polandcentral, swedencentral, northeurope, westeurope, eastus. Wszystko w jednym regionie. Faktyczny region wpisujemy do README w sekcji o Azure.
 

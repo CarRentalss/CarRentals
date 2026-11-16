@@ -1,4 +1,5 @@
 using Broker.Api.Background;
+using Broker.Api.Contracts;
 using Broker.Api.Data;
 using Broker.Api.Domain;
 using Broker.Api.Options;
@@ -39,6 +40,60 @@ public sealed class QuoteCleanupWorkerTests : IDisposable
         Assert.Equal(1, deleted);
         using var check = _db.CreateContext();
         Assert.Equal(2, await check.Quotes.CountAsync());
+    }
+
+    [Fact]
+    public async Task DeleteExpiredAsync_QuoteWithRental_DeletesQuoteAndKeepsRentalWithoutQuoteId()
+    {
+        var profile = NewProfile("oid-rental");
+        var quote = NewQuote(Now.UtcDateTime.AddDays(-2));
+        quote.UserProfileId = profile.Id;
+        var rentalId = Guid.NewGuid();
+        using (var db = _db.CreateContext())
+        {
+            db.UserProfiles.Add(profile);
+            db.Quotes.Add(quote);
+            db.Rentals.Add(new Rental
+            {
+                Id = rentalId,
+                UserProfileId = profile.Id,
+                QuoteId = quote.Id,
+                ProviderId = 1,
+                ProviderRentalId = Guid.NewGuid().ToString(),
+                ProviderCarId = quote.ProviderCarId,
+                CarLabel = quote.CarLabel,
+                StartDate = quote.StartDate,
+                EndDate = quote.EndDate,
+                TotalPrice = quote.TotalPrice,
+                Currency = quote.Currency,
+                FirstName = "Anna",
+                LastName = "Nowak",
+                Email = "anna@example.com",
+                Status = RentalStatus.Confirmed,
+                CreatedAtUtc = Now.UtcDateTime.AddDays(-2),
+                UpdatedAtUtc = Now.UtcDateTime.AddDays(-2)
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var services = new ServiceCollection()
+            .AddDbContext<BrokerDbContext>(o => o.UseSqlite(_db.Connection))
+            .BuildServiceProvider();
+        var worker = new QuoteCleanupWorker(
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Microsoft.Extensions.Options.Options.Create(new QuoteCleanupOptions { RetentionHours = 24 }),
+            new TestClock(Now),
+            NullLogger<QuoteCleanupWorker>.Instance);
+
+        var deleted = await worker.DeleteExpiredAsync(CancellationToken.None);
+
+        Assert.Equal(1, deleted);
+        using var check = _db.CreateContext();
+        var rental = await check.Rentals.SingleAsync();
+        Assert.Equal(rentalId, rental.Id);
+        Assert.Null(rental.QuoteId);
+        Assert.Equal("Toyota Corolla 2022", rental.CarLabel);
+        Assert.Equal(RentalStatus.Confirmed, rental.Status);
     }
 
     [Fact]

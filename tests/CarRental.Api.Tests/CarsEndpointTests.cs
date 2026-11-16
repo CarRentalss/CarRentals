@@ -19,6 +19,20 @@ public class CarsEndpointTests
     }
 
     [Fact]
+    public async Task GetCars_AnyResponse_HasSecurityHeaders()
+    {
+        await using var factory = new CarRentalApiFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/cars");
+
+        // Nagłówki są też na odpowiedziach z błędem (tu 401 bez klucza)
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Contains("default-src 'none'", response.Headers.GetValues("Content-Security-Policy").Single(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GetCars_WithWrongApiKey_Returns401()
     {
         await using var factory = new CarRentalApiFactory();
