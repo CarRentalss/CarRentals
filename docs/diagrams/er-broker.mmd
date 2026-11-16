@@ -1,0 +1,38 @@
+erDiagram
+  Providers ||--o{ Quotes : "ProviderId, Restrict"
+  UserProfiles |o--o{ Quotes : "UserProfileId null, SetNull"
+
+  Providers {
+    int Id PK
+    nvarchar_50 Code "UX: our, lecturer, other-group"
+    nvarchar_100 Name
+    bit IsEnabled
+  }
+  UserProfiles {
+    uniqueidentifier Id PK
+    nvarchar_100 EntraObjectId "UX"
+    nvarchar_254 Email
+    nvarchar_100 FirstName
+    nvarchar_100 LastName
+    date DateOfBirth "null"
+    date LicenseObtainedOn "null"
+    nvarchar_100 Location "null"
+    datetime2 CreatedAtUtc
+    datetime2 UpdatedAtUtc
+  }
+  Quotes {
+    uniqueidentifier Id PK
+    int ProviderId FK "IX"
+    uniqueidentifier UserProfileId FK "IX, null"
+    nvarchar_100 ProviderOfferId
+    nvarchar_100 ProviderCarId
+    nvarchar_200 CarLabel
+    decimal_10_2 DailyPrice
+    decimal_10_2 DailyInsurancePrice
+    decimal_10_2 TotalPrice
+    nchar_3 Currency
+    date StartDate
+    date EndDate
+    datetime2 ExpiresAtUtc "IX"
+    datetime2 CreatedAtUtc
+  }

@@ -1,0 +1,392 @@
+[
+  {
+    "id": 15,
+    "title": "MVP: pierwszy działający przekrój aplikacji",
+    "description": "Jako użytkownik chcę wyszukać auto, zobaczyć szczegóły i sprawdzić cenę w jednej aplikacji, aby od razu zobaczyć, że system działa od frontu do bazy. Na KM2 przekrój to React, Broker API, nasze Car Rental API i obie bazy. Front woła tylko Brokera, a Broker woła nasze API z kluczem x-api-key.",
+    "acceptanceCriteria": [
+      "strona główna pokazuje marki i modele pobrane z Car Rental API przez Brokera",
+      "wyszukiwarka ma filtr i stronicowanie po 5 wyników",
+      "strona szczegółów auta pokazuje wycenę z naszego API (cena dzienna, ubezpieczenie, ważność 10 minut)",
+      "w DevTools widać tylko wywołania /api/v1 Brokera, a w logu Car Rental API wywołanie od OurBroker",
+      "całość da się uruchomić lokalnie wg README"
+    ],
+    "storyPoints": 8,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  },
+  {
+    "id": 57,
+    "title": "Logowanie użytkownika przez Entra ID w Broker API",
+    "description": "Jako użytkownik chcę zalogować się kontem Microsoft, aby nie zakładać osobnego konta i mieć dostęp do profilu i wynajmów. Broker loguje przez OpenID Connect (Microsoft.Identity.Web) i trzyma sesję w ciasteczku, więc front nie widzi tokenów.",
+    "acceptanceCriteria": [
+      "GET /api/v1/auth/login przekierowuje do logowania Microsoft i po powrocie wraca na returnUrl",
+      "returnUrl przyjmujemy tylko lokalny (zaczyna się od /), inny zamieniamy na /",
+      "POST /api/v1/auth/logout usuwa sesję",
+      "GET /api/v1/auth/me zwraca stan logowania, imię, email i role",
+      "bez rejestracji Entra w Development działa dev-login, poza Development go nie ma"
+    ],
+    "storyPoints": 5,
+    "assignee": "Jagna Jażdżyk",
+    "priority": 1
+  },
+  {
+    "id": 58,
+    "title": "Konfiguracja aplikacji w Entra ID",
+    "description": "Jako zespół chcę mieć zarejestrowane aplikacje w Entra ID, aby Broker mógł logować użytkowników, a Car Rental API sprawdzać rolę pracownika. Rejestrujemy carrentals-api (scope access_as_user, rola Employee) i carrentals-broker (Web, redirect URI). Sekrety idą do App Settings, nie do repo.",
+    "acceptanceCriteria": [
+      "carrentals-api ma Application ID URI, scope access_as_user i app role Employee, token w wersji 2",
+      "carrentals-broker ma redirect URI dla Azure i dla localhost:5100 oraz client secret",
+      "osoba grająca pracownika ma przypisaną rolę Employee",
+      "TenantId, ClientId i ClientSecret są w App Settings i User Secrets, w repo ich nie ma",
+      "jak tenant PW blokuje rejestrację, jest opisany i wybrany plan B (własny tenant albo Google)"
+    ],
+    "storyPoints": 3,
+    "assignee": "Jagna Jażdżyk",
+    "priority": 1
+  },
+  {
+    "id": 59,
+    "title": "Ciasteczko sesji w Broker API",
+    "description": "Jako użytkownik chcę zostać zalogowany po odświeżeniu strony, aby nie logować się co chwilę. Sesja jest w ciasteczku Brokera, bo React i Broker są na tej samej domenie (React w wwwroot Brokera).",
+    "acceptanceCriteria": [
+      "ciasteczko sesji ma HttpOnly, Secure i SameSite=Lax",
+      "endpointy /api nie przekierowują na logowanie, tylko zwracają 401 albo 403",
+      "POST, PUT i DELETE bez nagłówka X-CSRF: 1 dostają 400",
+      "po wylogowaniu ciasteczko znika"
+    ],
+    "storyPoints": 3,
+    "assignee": "Jagna Jażdżyk",
+    "priority": 2
+  },
+  {
+    "id": 66,
+    "title": "Profil użytkownika w Broker DB",
+    "description": "Jako zalogowany użytkownik chcę mieć zapisany profil, aby nie wpisywać danych przy każdej wycenie. W Broker DB trzymamy datę urodzenia i datę prawa jazdy, a nie wiek i staż, bo te zmieniają się z czasem. Konfiguracja EF jest tylko fluent w Data/Configurations.",
+    "acceptanceCriteria": [
+      "tabela UserProfiles powstaje z migracji InitialCreate, z unikalnym indeksem na EntraObjectId",
+      "profil tworzy się przy pierwszym wejściu z imieniem, nazwiskiem i emailem z konta",
+      "wiek i staż prawa jazdy liczymy na dziś z dat w profilu",
+      "na encjach nie ma atrybutów EF, kontrakty są osobno od encji",
+      "Broker DB ma też tabele Providers (seed 3 wypożyczalni) i Quotes"
+    ],
+    "storyPoints": 5,
+    "assignee": "Jagna Jażdżyk",
+    "priority": 1
+  },
+  {
+    "id": 67,
+    "title": "Przycisk Zaloguj i Wyloguj w React",
+    "description": "Jako użytkownik chcę widzieć w menu, czy jestem zalogowany, aby wiedzieć, czy mogę wejść w profil i panel. Stan logowania front bierze z GET /api/v1/auth/me.",
+    "acceptanceCriteria": [
+      "niezalogowany widzi Zaloguj, zalogowany swoje imię i Wyloguj",
+      "Zaloguj przenosi na /api/v1/auth/login i wraca na tę samą stronę",
+      "link Panel pracownika widzi tylko osoba z rolą Employee",
+      "lokalnie bez Entra działa szybkie logowanie deweloperskie"
+    ],
+    "storyPoints": 3,
+    "assignee": "Karolina Strzelecka",
+    "priority": 2
+  },
+  {
+    "id": 84,
+    "title": "Wyszukiwanie aut po marce i modelu",
+    "description": "Jako użytkownik chcę wybrać markę i model na stronie głównej, aby szybko znaleźć auto, które mnie interesuje. Listy marek i modeli bierzemy z podłączonych API, bo mogą się zmieniać. Broker pyta wszystkie wypożyczalnie naraz i pokazuje wyniki razem.",
+    "acceptanceCriteria": [
+      "marki i modele pochodzą z GET /api/v1/cars/makes, nie są wpisane w kodzie",
+      "po wybraniu marki widać tylko modele tej marki",
+      "wynik pokazuje markę, model, rok, lokalizację i wypożyczalnię",
+      "jak jedna wypożyczalnia nie odpowie w 15 s, wyniki z pozostałych i tak się pokazują",
+      "jak nic nie znaleziono, widać komunikat zamiast pustej strony",
+      "są testy integracyjne Broker z Car Rental API"
+    ],
+    "storyPoints": 8,
+    "assignee": "Jagna Jażdżyk",
+    "priority": 1
+  },
+  {
+    "id": 85,
+    "title": "Wyszukiwanie bez logowania",
+    "description": "Jako niezalogowany użytkownik chcę wyszukiwać auta i sprawdzać ceny, aby nie zakładać konta tylko po to, żeby porównać oferty. Logowanie jest potrzebne dopiero przy wynajmie.",
+    "acceptanceCriteria": [
+      "niezalogowany może wyszukiwać, otworzyć szczegóły auta i sprawdzić wycenę",
+      "przy wyszukiwaniu nie prosimy o email",
+      "w Brokerze wyszukiwanie i wycena mają jawne AllowAnonymous, reszta wymaga logowania (fallback deny)",
+      "logowanie jest potrzebne dopiero po kliknięciu Rent Me (KM3)"
+    ],
+    "storyPoints": 2,
+    "assignee": "Karolina Strzelecka",
+    "priority": 2
+  },
+  {
+    "id": 86,
+    "title": "Stronicowanie wyników",
+    "description": "Jako użytkownik chcę przeglądać wyniki po 5 aut na stronę, aby lista była czytelna. Stronicowanie robi Broker, a front tylko pokazuje strony.",
+    "acceptanceCriteria": [
+      "gdy wyników jest więcej niż 5, pojawia się stronicowanie po 5 aut",
+      "filtr po roku produkcji działa razem ze stronicowaniem",
+      "zmiana strony nie kasuje wybranych filtrów",
+      "strona za ostatnią zwraca pustą listę z poprawną liczbą wszystkich wyników"
+    ],
+    "storyPoints": 3,
+    "assignee": "Karolina Strzelecka",
+    "priority": 2
+  },
+  {
+    "id": 89,
+    "title": "Wycena z danych użytkownika",
+    "description": "Jako użytkownik chcę sprawdzić cenę wynajmu dla swoich danych, aby wiedzieć, ile zapłacę. Wycena potrzebuje wieku, stażu prawa jazdy, lokalizacji i dat. Zalogowanemu brakujące dane Broker bierze z profilu.",
+    "acceptanceCriteria": [
+      "POST /api/v1/offers zwraca oferty z wypożyczalnią, ceną dzienną, ubezpieczeniem, ceną całkowitą i ważnością",
+      "oferta jest ważna co najmniej 10 minut",
+      "zalogowany może pominąć wiek, staż i lokalizację, wtedy Broker bierze je z profilu",
+      "front pokazuje spinner w czasie wyceny i komunikat, gdy nie ma ofert",
+      "każda oferta jest zapisana w tabeli Quotes"
+    ],
+    "storyPoints": 5,
+    "assignee": "Jagna Jażdżyk",
+    "priority": 1
+  },
+  {
+    "id": 100,
+    "title": "Logowanie i rola pracownika",
+    "description": "Jako pracownik wypożyczalni chcę zalogować się i mieć dostęp do panelu, aby obsługiwać wynajmy naszej firmy. Rolę Employee daje Entra ID (app role), a lokalnie dev-login z rolą.",
+    "acceptanceCriteria": [
+      "panel i endpointy /api/v1/employee wymagają roli Employee",
+      "zalogowany użytkownik bez roli dostaje 403, a nie widzi danych",
+      "klient nie widzi w menu linku do panelu",
+      "Car Rental API bez Entra w chmurze nie wpuszcza nikogo do /employee (fail-safe)"
+    ],
+    "storyPoints": 3,
+    "assignee": "Jagna Jażdżyk",
+    "priority": 1
+  },
+  {
+    "id": 101,
+    "title": "Lista wypożyczeń firmy w panelu pracownika",
+    "description": "Jako pracownik chcę widzieć wynajmy naszej wypożyczalni, aby wiedzieć, które auta są aktywne, a które czekają na odbiór. Dane bierzemy z GET /api/v1/employee/rentals w Car Rental API przez Brokera.",
+    "acceptanceCriteria": [
+      "lista pokazuje auto, klienta, daty, status i cenę",
+      "filtr po statusie działa (aktywne, do odbioru)",
+      "kliknięcie w wiersz otwiera szczegóły wynajmu",
+      "nie ma wynajmów innych firm",
+      "sprawdzone ręcznie kontem z rolą Employee"
+    ],
+    "storyPoints": 5,
+    "assignee": "Karolina Strzelecka",
+    "priority": 1
+  },
+  {
+    "id": 111,
+    "title": "Uzupełnianie danych w profilu",
+    "description": "Jako zalogowany użytkownik chcę uzupełnić datę urodzenia, datę prawa jazdy i lokalizację, aby wycena i wynajem miały komplet danych.",
+    "acceptanceCriteria": [
+      "strona Profil pokazuje formularz z imieniem, nazwiskiem, emailem, datą urodzenia, datą prawa jazdy i lokalizacją",
+      "zapis idzie przez PUT /api/v1/profile",
+      "błędy walidacji widać przy polach (np. wiek poniżej 18 lat)",
+      "po zapisie widać komunikat o sukcesie"
+    ],
+    "storyPoints": 3,
+    "assignee": "Karolina Strzelecka",
+    "priority": 2
+  },
+  {
+    "id": 112,
+    "title": "Zmiana danych w profilu",
+    "description": "Jako zalogowany użytkownik chcę zmienić dane w profilu, aby po przeprowadzce albo zmianie maila wycena była dalej poprawna.",
+    "acceptanceCriteria": [
+      "zapisane dane wczytują się do formularza",
+      "zmiana i zapis aktualizują profil w Broker DB",
+      "puste pole opcjonalne czyści wartość"
+    ],
+    "storyPoints": 2,
+    "assignee": "Karolina Strzelecka",
+    "priority": 3
+  },
+  {
+    "id": 113,
+    "title": "Autouzupełnianie wyceny z profilu",
+    "description": "Jako zalogowany użytkownik chcę, żeby formularz wyceny wypełnił się danymi z profilu, aby nie wpisywać ich za każdym razem. Mogę je zmienić przed wyceną.",
+    "acceptanceCriteria": [
+      "po zalogowaniu wiek, staż i lokalizacja w formularzu wyceny są wypełnione z profilu",
+      "zmienione wartości w formularzu mają pierwszeństwo przed profilem",
+      "niezalogowany wpisuje dane ręcznie"
+    ],
+    "storyPoints": 2,
+    "assignee": "Karolina Strzelecka",
+    "priority": 2
+  },
+  {
+    "id": 114,
+    "title": "Komunikat o brakujących danych w profilu",
+    "description": "Jako zalogowany użytkownik chcę wiedzieć, których danych brakuje w profilu, aby uzupełnić je przed wynajmem.",
+    "acceptanceCriteria": [
+      "GET /api/v1/profile zwraca isComplete i listę missingFields",
+      "front pokazuje komunikat z brakującymi polami i link do profilu",
+      "po uzupełnieniu komunikat znika"
+    ],
+    "storyPoints": 1,
+    "assignee": "Karolina Strzelecka",
+    "priority": 3
+  },
+  {
+    "id": 116,
+    "title": "Prywatność i ciasteczka",
+    "description": "Jako użytkownik chcę wiedzieć, jakie dane o mnie trzymacie i jakich ciasteczek używacie, aby świadomie korzystać z aplikacji. Strona i baner są już w React jako dodatek na KM2, sprawdzamy je po podpięciu Brokera.",
+    "acceptanceCriteria": [
+      "strona Prywatność opisuje, jakie dane osobowe trzymamy i gdzie",
+      "baner o ciasteczkach pokazuje się przy pierwszym wejściu i znika po akceptacji",
+      "używamy tylko ciasteczka sesji Brokera (niezbędne)"
+    ],
+    "storyPoints": 2,
+    "assignee": "Karolina Strzelecka",
+    "priority": 3
+  },
+  {
+    "id": 117,
+    "title": "Lista aut w Car Rental API (GET /api/v1/cars)",
+    "description": "Jako broker chcę pobrać listę aut naszej wypożyczalni, aby pokazać je w wyszukiwarce. Broker łączy się kluczem x-api-key, każdy broker ma swój.",
+    "acceptanceCriteria": [
+      "broker z kluczem x-api-key dostaje listę aut z id, marką, modelem, rokiem, lokalizacją i dostępnością",
+      "bez klucza albo ze złym kluczem jest 401",
+      "GET /api/v1/cars/{id} zwraca jedno auto, a nieznane id 404",
+      "klucz drugiej grupy też działa",
+      "każdy przypadek ma test w CarsEndpointTests"
+    ],
+    "storyPoints": 3,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  },
+  {
+    "id": 118,
+    "title": "Filtry listy aut",
+    "description": "Jako broker chcę filtrować auta po marce, modelu i roku, aby nie pobierać całej floty przy każdym wyszukiwaniu.",
+    "acceptanceCriteria": [
+      "filtr make, model i year działa osobno i razem",
+      "wielkość liter w marce i modelu nie ma znaczenia",
+      "bez filtrów jest cała flota",
+      "filtr bez wyników daje 200 i pustą listę"
+    ],
+    "storyPoints": 2,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 2
+  },
+  {
+    "id": 119,
+    "title": "Oferta z wyceną (POST /api/v1/offers)",
+    "description": "Jako broker chcę dostać ofertę z ceną dla konkretnego kierowcy i terminu, aby pokazać ją użytkownikowi. Oferta jest zapisywana w bazie, bo wynajem robimy potem na jej podstawie. Cena rośnie o 25%, gdy kierowca ma mniej niż 25 lat, i o 20%, gdy ma prawo jazdy krócej niż 3 lata.",
+    "acceptanceCriteria": [
+      "poprawne zapytanie zwraca 201 z offerId, dailyPrice, dailyInsurancePrice, totalPrice i expiresAt",
+      "oferta jest ważna 10 minut",
+      "kierowca 22 lata ze stażem 2 lata płaci 1,5 razy cenę bazową",
+      "daty w przeszłości, koniec przed początkiem, wynajem dłuższy niż 30 dni i staż większy niż wiek minus 18 dają 400",
+      "inne miasto niż miasto auta daje 400, nieznane auto 404, auto zajęte w tym terminie 409",
+      "każdy przypadek ma test integracyjny w OffersEndpointTests"
+    ],
+    "storyPoints": 5,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  },
+  {
+    "id": 120,
+    "title": "Wniosek o wynajem (POST /api/v1/rentals)",
+    "description": "Jako broker chcę złożyć wniosek o wynajem na podstawie oferty, aby klient mógł wypożyczyć auto. Wniosek nie jest potwierdzany od razu, bo tak działa prawdziwa wypożyczalnia. Dostępność sprawdzamy drugi raz w transakcji.",
+    "acceptanceCriteria": [
+      "poprawny wniosek zwraca 202 z rentalId i statusem Pending",
+      "wygasła oferta daje 410, druga próba na tej samej ofercie 409",
+      "cudza oferta (innego brokera) daje 404",
+      "imię, nazwisko i email są wymagane, zły email daje 400"
+    ],
+    "storyPoints": 5,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  },
+  {
+    "id": 121,
+    "title": "Status wynajmu (GET /api/v1/rentals/{rentalId})",
+    "description": "Jako broker chcę sprawdzać status wniosku, aby pokazać klientowi, czy wynajem jest potwierdzony. Po około 10 s proces w tle zmienia Pending na Confirmed.",
+    "acceptanceCriteria": [
+      "GET zwraca status, powód odrzucenia, auto, daty i cenę",
+      "po około 10 s status zmienia się z Pending na Confirmed",
+      "broker widzi tylko swoje wynajmy, cudzy daje 404"
+    ],
+    "storyPoints": 3,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  },
+  {
+    "id": 125,
+    "title": "Zgłoszenie zwrotu (POST /api/v1/rentals/{rentalId}/return)",
+    "description": "Jako broker chcę zgłosić zwrot w imieniu klienta, aby wypożyczalnia mogła odebrać auto. Zgłoszenie nie kończy wynajmu, tylko zmienia status na ReturnRequested.",
+    "acceptanceCriteria": [
+      "zwrot potwierdzonego wynajmu zmienia status na ReturnRequested",
+      "zły email klienta daje 403",
+      "zwrot wynajmu w innym statusie niż Confirmed daje 409",
+      "cudzy wynajem daje 404"
+    ],
+    "storyPoints": 2,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 2
+  },
+  {
+    "id": 126,
+    "title": "Potwierdzenie zwrotu przez pracownika",
+    "description": "Jako pracownik chcę potwierdzić odbiór auta z notatką i zdjęciem albo PDF-em, aby zamknąć wynajem i mieć dowód stanu auta. Pliki sprawdzamy po pierwszych bajtach, więc przemianowany plik .exe nie przejdzie.",
+    "acceptanceCriteria": [
+      "POST /api/v1/employee/rentals/{rentalId}/confirm-return z notatką i plikiem zmienia status na Completed",
+      "przyjmujemy tylko jpg, png i pdf do 10 MB",
+      "wynajem, który nie czeka na odbiór, daje 409",
+      "załącznik da się pobrać tylko z rolą Employee",
+      "formularz w panelu pracownika (UI) jest jako dodatek na KM2, ten sam proces działa też przez Swagger i Postmana"
+    ],
+    "storyPoints": 5,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 2
+  },
+  {
+    "id": 141,
+    "title": "Przygotowanie CarRental DB",
+    "description": "Jako zespół chcę mieć bazę naszej wypożyczalni z tabelami, indeksami i autami na start, aby API działało od razu po wdrożeniu. Schemat powstaje z migracji EF, a konfiguracja jest tylko fluent w Data/Configurations.",
+    "acceptanceCriteria": [
+      "migracja InitialCreate tworzy tabele Cars, Offers i Rentals z kluczami obcymi i indeksami",
+      "seed dodaje 12 aut",
+      "status wynajmu jest zapisany jako tekst",
+      "na encjach nie ma atrybutów EF",
+      "są min. 3 testy DB na SQL Server w osobnym projekcie CarRental.Api.IntegrationTests"
+    ],
+    "storyPoints": 5,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  },
+  {
+    "id": 142,
+    "title": "Basic pipeline CI/CD",
+    "description": "Jako zespół chcę, żeby każdy PR i merge był budowany i testowany automatycznie, aby nie scalać kodu, który się nie buduje albo ma podatne paczki. Pipeline Jagna676.CarRentals w ADO ma etapy Build, Test i Deploy. Numer builda ma format 1.2.N, bo chcemy wiedzieć, która wersja jest na Azure.",
+    "acceptanceCriteria": [
+      "PR do develop albo main uruchamia pipeline, a status widać w PR na GitHubie",
+      "etapy Build i Test są zielone na develop i main",
+      "wyniki testów i pokrycie są w zakładkach Tests i Code Coverage, próg pokrycia 40%",
+      "build się przerywa, gdy jest podatna paczka NuGet albo npm (poziom high)",
+      "numer builda ma format 1.2.N i ten sam numer jest w assembly",
+      "artefakty carrental-api, broker-api i efbundles są do pobrania z builda"
+    ],
+    "storyPoints": 5,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  },
+  {
+    "id": 143,
+    "title": "Uruchomienie podstawowej aplikacji w Azure",
+    "description": "Jako zespół chcę, żeby merge do main wdrażał aplikację na Azure razem z aktualizacją bazy, aby druga grupa i prowadzący mieli działający adres. Pipeline wdraża przez service connection sc-azure-carrentals, a migracje puszcza przed wdrożeniem kodu.",
+    "acceptanceCriteria": [
+      "merge do main wdraża Car Rental API i Broker API bez ręcznego klikania",
+      "bundle migracji aktualizuje sqldb-carrental i sqldb-broker przed wdrożeniem kodu",
+      "GET /health na obu App Service zwraca 200",
+      "w Azure SQL jest tabela Cars z 12 autami z seeda",
+      "APP_VERSION w App Service ma ten sam numer co build",
+      "w repo nie ma żadnego sekretu z Azure"
+    ],
+    "storyPoints": 8,
+    "assignee": "Maksymilian Paczyński",
+    "priority": 1
+  }
+]

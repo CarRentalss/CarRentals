@@ -1,0 +1,54 @@
+erDiagram
+  Cars ||--o{ Offers : "CarId, Restrict"
+  Cars ||--o{ Rentals : "CarId, Restrict"
+  Offers ||--o| Rentals : "OfferId unikalny, Restrict"
+
+  Cars {
+    int Id PK
+    nvarchar_50 Make "IX (Make, Model)"
+    nvarchar_50 Model
+    int Year
+    nvarchar_100 Location
+    decimal_10_2 BasePricePerDay
+    decimal_10_2 InsurancePricePerDay
+    bit IsActive
+  }
+  Offers {
+    uniqueidentifier Id PK
+    int CarId FK "IX"
+    int DriverAge
+    int LicenseYears
+    nvarchar_100 Location
+    date StartDate
+    date EndDate
+    decimal_10_2 DailyPrice
+    decimal_10_2 DailyInsurancePrice
+    decimal_12_2 TotalPrice
+    nvarchar_3 Currency
+    datetime2 CreatedAtUtc
+    datetime2 ExpiresAtUtc "IX"
+    nvarchar_100 BrokerName
+  }
+  Rentals {
+    uniqueidentifier Id PK
+    uniqueidentifier OfferId FK "UX"
+    int CarId FK "IX (CarId, Status)"
+    date StartDate
+    date EndDate
+    decimal_12_2 TotalPrice
+    nvarchar_100 FirstName
+    nvarchar_100 LastName
+    nvarchar_254 Email
+    nvarchar_20 Status "tekst, IX (Status, CreatedAtUtc)"
+    nvarchar_500 Reason "null"
+    nvarchar_100 BrokerName "IX"
+    datetime2 CreatedAtUtc
+    datetime2 UpdatedAtUtc
+    datetime2 ReturnRequestedAtUtc "null"
+    datetime2 CompletedAtUtc "null"
+    nvarchar_200 CompletedBy "null"
+    nvarchar_1000 ReturnNote "null"
+    nvarchar_300 AttachmentKey "null"
+    nvarchar_100 AttachmentContentType "null"
+    nvarchar_255 AttachmentFileName "null"
+  }

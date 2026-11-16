@@ -7,13 +7,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace CarRental.Api.Controllers;
 
 /// <summary>Wnioski o wynajem, status i zgłoszenie zwrotu.</summary>
-[Route("rentals")]
+[Route("api/v1/rentals")]
 [Authorize(Policy = AuthConstants.BrokerPolicy)]
 public sealed class RentalsController(RentalService rentals) : ApiControllerBase
 {
     /// <summary>
     /// Składa wniosek o wynajem na podstawie oferty. Odpowiedź 202: wniosek przyjęty ze statusem Pending,
-    /// wynik trzeba sprawdzić przez GET /rentals/{rentalId}.
+    /// wynik trzeba sprawdzić przez GET /api/v1/rentals/{rentalId}.
     /// </summary>
     [HttpPost]
     [Consumes("application/json")]

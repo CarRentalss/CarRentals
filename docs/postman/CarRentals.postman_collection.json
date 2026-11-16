@@ -1,0 +1,1237 @@
+{
+  "info": {
+    "_postman_id": "94d555dc-a3d5-5bcc-a939-d06c396c4241",
+    "name": "CarRentals",
+    "description": "Car Rentals (KM2). Proces wynajmu w naszym Car Rental API (lokalnie, http://localhost:5080) i podstawowe wywołania Broker API (http://localhost:5100).\n\nJak uruchomić:\n1. docker compose up --build (z katalogu głównego repo) albo dotnet run obu API.\n2. W Postmanie Import: ta kolekcja i environment local (docs/postman/local.postman_environment.json), wybrać environment local.\n3. Folder \"Car Rental API: proces wynajmu\" uruchomić w Runnerze w kolejności. Krok 6 czeka 15 s na potwierdzenie w tle.\n4. Potem folder \"Car Rental API: bezpieczeństwo\" i \"Broker API\".\n\nZmienne offerId i rentalId ustawiają się same w zakładce Tests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Car Rental API: proces wynajmu",
+      "description": "Lista aut, oferta, wynajem, status po 10 s, zwrot, potwierdzenie zwrotu przez pracownika. Uruchamiać po kolei (Runner).",
+      "item": [
+        {
+          "name": "1. Lista aut",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cars",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cars"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const cars = pm.response.json();",
+                  "pm.test(\"lista ma 12 aut z seeda\", () => pm.expect(cars).to.be.an(\"array\").with.lengthOf(12));",
+                  "pm.test(\"auto ma id, make, model, year, location, available\", () => {",
+                  "    pm.expect(cars[0]).to.include.all.keys(\"id\", \"make\", \"model\", \"year\", \"location\", \"available\");",
+                  "});",
+                  "// Bierzemy pierwsze auto z Warszawy (oferta musi być w mieście auta)",
+                  "const car = cars.find(c => c.location === \"Warszawa\") || cars[0];",
+                  "pm.collectionVariables.set(\"carId\", car.id);",
+                  "pm.collectionVariables.set(\"carLocation\", car.location);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Szczegóły auta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cars/{{carId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cars",
+                "{{carId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"to samo auto\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"carId\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Oferta (wycena)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/offers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "offers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"carId\": {{carId}},\n  \"age\": 30,\n  \"licenseYears\": 10,\n  \"location\": \"{{carLocation}}\",\n  \"startDate\": \"{{startDate}}\",\n  \"endDate\": \"{{endDate}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Termin daleko w przyszłości i losowy, żeby kolejne przebiegi nie trafiały na zajęte auto (409)",
+                  "const offset = 40 + Math.floor(Math.random() * 300);",
+                  "const start = new Date();",
+                  "start.setUTCDate(start.getUTCDate() + offset);",
+                  "const end = new Date(start);",
+                  "end.setUTCDate(end.getUTCDate() + 3);",
+                  "const fmt = d => d.toISOString().slice(0, 10);",
+                  "pm.collectionVariables.set(\"startDate\", fmt(start));",
+                  "pm.collectionVariables.set(\"endDate\", fmt(end));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const offer = pm.response.json();",
+                  "pm.test(\"jest offerId, ceny i termin ważności\", () => {",
+                  "    pm.expect(offer).to.include.all.keys(\"offerId\", \"dailyPrice\", \"dailyInsurancePrice\", \"totalPrice\", \"currency\", \"days\", \"expiresAt\");",
+                  "});",
+                  "pm.test(\"cena całkowita = (cena dzienna + ubezpieczenie) razy dni\", () => {",
+                  "    pm.expect(offer.totalPrice).to.be.closeTo((offer.dailyPrice + offer.dailyInsurancePrice) * offer.days, 0.01);",
+                  "});",
+                  "pm.test(\"oferta ważna co najmniej 9,5 minuty\", () => {",
+                  "    const minutes = (new Date(offer.expiresAt) - new Date()) / 60000;",
+                  "    pm.expect(minutes).to.be.above(9.5);",
+                  "});",
+                  "pm.collectionVariables.set(\"offerId\", offer.offerId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Wniosek o wynajem",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rentals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rentals"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"offerId\": \"{{offerId}}\",\n  \"firstName\": \"Jan\",\n  \"lastName\": \"Kowalski\",\n  \"email\": \"{{customerEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"202 Accepted\", () => pm.response.to.have.status(202));",
+                  "const rental = pm.response.json();",
+                  "pm.test(\"status Pending\", () => pm.expect(rental.status).to.eql(\"Pending\"));",
+                  "pm.test(\"jest rentalId\", () => pm.expect(rental.rentalId).to.be.a(\"string\").and.not.empty);",
+                  "pm.collectionVariables.set(\"rentalId\", rental.rentalId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Status zaraz po wniosku",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rentals/{{rentalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rentals",
+                "{{rentalId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"wniosek jeszcze czeka (Pending)\", () => pm.expect(pm.response.json().status).to.eql(\"Pending\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Status po 10 s",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rentals/{{rentalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rentals",
+                "{{rentalId}}"
+              ]
+            },
+            "description": "Czeka 15 s w Pre-request (10 s opóźnienia potwierdzenia + do 5 s na kolejne sprawdzenie bazy przez proces w tle)."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Proces w tle potwierdza wniosek po 10 s i sprawdza bazę co 5 s, więc czekamy 15 s",
+                  "setTimeout(() => {}, 15000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"wynajem potwierdzony (Confirmed)\", () => pm.expect(pm.response.json().status).to.eql(\"Confirmed\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Zgłoszenie zwrotu",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rentals/{{rentalId}}/return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rentals",
+                "{{rentalId}}",
+                "return"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status ReturnRequested\", () => pm.expect(pm.response.json().status).to.eql(\"ReturnRequested\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Pracownik: wynajmy do odbioru",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Dev-Employee",
+                "value": "{{devEmployee}}"
+              },
+              {
+                "key": "X-Dev-Roles",
+                "value": "Employee"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/employee/rentals?status=ReturnRequested",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "employee",
+                "rentals"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ReturnRequested"
+                }
+              ]
+            },
+            "description": "Lokalnie (Development, bez AzureAd) pracownik loguje się nagłówkami X-Dev-Employee i X-Dev-Roles. W Azure potrzebny jest token z Entra z rolą Employee."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test(\"nasz wynajem jest na liście do odbioru\", () => {",
+                  "    pm.expect(list.map(r => r.rentalId)).to.include(pm.collectionVariables.get(\"rentalId\"));",
+                  "});",
+                  "pm.test(\"wszystkie mają status ReturnRequested\", () => list.forEach(r => pm.expect(r.status).to.eql(\"ReturnRequested\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Pracownik: szczegóły wynajmu",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Dev-Employee",
+                "value": "{{devEmployee}}"
+              },
+              {
+                "key": "X-Dev-Roles",
+                "value": "Employee"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/employee/rentals/{{rentalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "employee",
+                "rentals",
+                "{{rentalId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"dane klienta i status\", () => {",
+                  "    pm.expect(r.firstName).to.eql(\"Jan\");",
+                  "    pm.expect(r.status).to.eql(\"ReturnRequested\");",
+                  "    pm.expect(r.hasAttachment).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Pracownik: potwierdzenie zwrotu (notatka + PDF)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Dev-Employee",
+                "value": "{{devEmployee}}"
+              },
+              {
+                "key": "X-Dev-Roles",
+                "value": "Employee"
+              },
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data; boundary=----CarRentalsBoundary7MA4YWxkTrZu0gW"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/employee/rentals/{{rentalId}}/confirm-return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "employee",
+                "rentals",
+                "{{rentalId}}",
+                "confirm-return"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "------CarRentalsBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"Note\"\r\n\r\nAuto oddane czyste, bez uszkodzeń, pełny bak.\r\n------CarRentalsBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"File\"; filename=\"protokol-zwrotu.pdf\"\r\nContent-Type: application/pdf\r\n\r\n%PDF-1.4\n% Protokol zwrotu auta (plik testowy z Postmana)\n%%EOF\r\n------CarRentalsBoundary7MA4YWxkTrZu0gW--\r\n"
+            },
+            "description": "Body to gotowy multipart/form-data z notatką i małym plikiem PDF (zaczyna się od %PDF, API sprawdza pierwsze bajty). Dzięki temu kolekcja nie potrzebuje pliku na dysku. Można też przełączyć Body na form-data i wybrać własny plik jpg, png albo pdf (pola Note i File)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status Completed\", () => pm.expect(pm.response.json().status).to.eql(\"Completed\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Pracownik: pobranie załącznika",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Dev-Employee",
+                "value": "{{devEmployee}}"
+              },
+              {
+                "key": "X-Dev-Roles",
+                "value": "Employee"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/employee/rentals/{{rentalId}}/attachment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "employee",
+                "rentals",
+                "{{rentalId}}",
+                "attachment"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"plik PDF\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/pdf\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12. Status na koniec",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rentals/{{rentalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rentals",
+                "{{rentalId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"wynajem zakończony (Completed)\", () => pm.expect(pm.response.json().status).to.eql(\"Completed\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Car Rental API: bezpieczeństwo",
+      "description": "Klucze brokerów i rola pracownika. Uruchomić po folderze z procesem.",
+      "item": [
+        {
+          "name": "Lista aut bez klucza",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cars",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cars"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 bez x-api-key\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wynajem widziany kluczem drugiej grupy",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{otherGroupApiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rentals/{{rentalId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rentals",
+                "{{rentalId}}"
+              ]
+            },
+            "description": "Najpierw uruchom folder z procesem, żeby był rentalId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404, bo broker widzi tylko swoje wynajmy\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Panel pracownika z samym kluczem brokera",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/employee/rentals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "employee",
+                "rentals"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401, klucz brokera nie daje roli pracownika\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Panel pracownika bez roli Employee",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Dev-Employee",
+                "value": "jan"
+              },
+              {
+                "key": "X-Dev-Roles",
+                "value": "Customer"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/employee/rentals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "employee",
+                "rentals"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 dla zalogowanego bez roli\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 bez klucza\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Broker API",
+      "description": "Katalog, marki, szczegóły i wycena przez Brokera (Broker woła nasze Car Rental API). Na końcu dev-login i panel pracownika przez Brokera.",
+      "item": [
+        {
+          "name": "Health Brokera",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/health",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marki i modele",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/cars/makes",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cars",
+                "makes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const makes = pm.response.json();",
+                  "pm.test(\"lista marek z modelami\", () => {",
+                  "    pm.expect(makes).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(makes[0]).to.include.all.keys(\"make\", \"models\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lista aut z filtrem i stronicowaniem",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/cars?make=Toyota&page=1&pageSize=5",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cars"
+              ],
+              "query": [
+                {
+                  "key": "make",
+                  "value": "Toyota"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json();",
+                  "pm.test(\"strona ma najwyżej 5 aut\", () => pm.expect(page.items.length).to.be.at.most(5));",
+                  "pm.test(\"same Toyoty z naszej wypożyczalni\", () => page.items.forEach(c => {",
+                  "    pm.expect(c.make).to.eql(\"Toyota\");",
+                  "    pm.expect(c.provider).to.be.a(\"string\");",
+                  "}));",
+                  "pm.test(\"jest totalCount i totalPages\", () => pm.expect(page).to.include.all.keys(\"totalCount\", \"totalPages\", \"skippedProviders\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wszystkie auta, strona 3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/cars?page=3&pageSize=5",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cars"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "3"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json();",
+                  "pm.test(\"12 aut, 3 strony po 5\", () => {",
+                  "    pm.expect(page.totalCount).to.eql(12);",
+                  "    pm.expect(page.totalPages).to.eql(3);",
+                  "    pm.expect(page.items.length).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Szczegóły auta",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/cars/our/1",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cars",
+                "our",
+                "1"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const car = pm.response.json();",
+                  "pm.test(\"Toyota Corolla z naszej wypożyczalni\", () => {",
+                  "    pm.expect(car.provider).to.eql(\"our\");",
+                  "    pm.expect(car.carId).to.eql(\"1\");",
+                  "    pm.expect(car.make).to.eql(\"Toyota\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wycena (anonimowo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF",
+                "value": "1"
+              }
+            ],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/offers",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "offers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"our\",\n  \"carId\": \"1\",\n  \"startDate\": \"{{startDate}}\",\n  \"endDate\": \"{{endDate}}\",\n  \"age\": 30,\n  \"licenseYears\": 8,\n  \"location\": \"Warszawa\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Termin daleko w przyszłości i losowy, żeby kolejne przebiegi nie trafiały na zajęte auto (409)",
+                  "const offset = 40 + Math.floor(Math.random() * 300);",
+                  "const start = new Date();",
+                  "start.setUTCDate(start.getUTCDate() + offset);",
+                  "const end = new Date(start);",
+                  "end.setUTCDate(end.getUTCDate() + 3);",
+                  "const fmt = d => d.toISOString().slice(0, 10);",
+                  "pm.collectionVariables.set(\"startDate\", fmt(start));",
+                  "pm.collectionVariables.set(\"endDate\", fmt(end));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"jest oferta z naszej wypożyczalni\", () => {",
+                  "    pm.expect(res.offers).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(res.offers[0]).to.include.all.keys(\"quoteId\", \"provider\", \"offerId\", \"dailyPrice\", \"dailyInsurancePrice\", \"totalPrice\", \"expiresAt\");",
+                  "});",
+                  "pm.test(\"nikt nie został pominięty\", () => pm.expect(res.skippedProviders).to.be.an(\"array\").that.is.empty);",
+                  "pm.test(\"odpowiedź w mniej niż 15 s\", () => pm.expect(pm.response.responseTime).to.be.below(15000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wycena bez nagłówka X-CSRF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/offers",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "offers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"our\",\n  \"carId\": \"1\",\n  \"startDate\": \"{{startDate}}\",\n  \"endDate\": \"{{endDate}}\",\n  \"age\": 30,\n  \"licenseYears\": 8,\n  \"location\": \"Warszawa\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 bez X-CSRF: 1\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dev-login jako pracownik",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/auth/dev-login?name={{devEmployee}}&role=Employee",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "dev-login"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "{{devEmployee}}"
+                },
+                {
+                  "key": "role",
+                  "value": "Employee"
+                }
+              ]
+            },
+            "description": "Tylko lokalnie (Development, Auth:UseDevLogin=true). Postman zapisuje ciasteczko sesji Brokera i wysyła je w kolejnych zapytaniach do localhost:5100."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const me = pm.response.json();",
+                  "pm.test(\"zalogowany z rolą Employee\", () => {",
+                  "    pm.expect(me.isAuthenticated).to.eql(true);",
+                  "    pm.expect(me.isEmployee).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kto jest zalogowany",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/auth/me",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"sesja z ciasteczka działa\", () => pm.expect(pm.response.json().isAuthenticated).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Panel pracownika przez Brokera",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/employee/rentals",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "employee",
+                "rentals"
+              ]
+            },
+            "description": "Broker woła GET /api/v1/employee/rentals w Car Rental API (lokalnie z nagłówkami dev pracownika)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"lista wynajmów naszej firmy\", () => pm.expect(pm.response.json()).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wylogowanie",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF",
+                "value": "1"
+              }
+            ],
+            "url": {
+              "raw": "{{brokerUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{brokerUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"204 No Content\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "carId",
+      "value": ""
+    },
+    {
+      "key": "carLocation",
+      "value": ""
+    },
+    {
+      "key": "offerId",
+      "value": ""
+    },
+    {
+      "key": "rentalId",
+      "value": ""
+    },
+    {
+      "key": "startDate",
+      "value": ""
+    },
+    {
+      "key": "endDate",
+      "value": ""
+    }
+  ]
+}

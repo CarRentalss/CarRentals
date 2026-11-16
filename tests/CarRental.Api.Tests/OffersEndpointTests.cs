@@ -12,7 +12,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers", TestApi.OfferBody());
+        var response = await client.PostAsJsonAsync("/api/v1/offers", TestApi.OfferBody());
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var offer = await response.Content.ReadFromJsonAsync<OfferResponse>(CarRentalApiFactory.Json);
@@ -45,7 +45,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/offers", TestApi.OfferBody());
+        var response = await client.PostAsJsonAsync("/api/v1/offers", TestApi.OfferBody());
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -58,7 +58,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers", TestApi.OfferBody(age: age, licenseYears: licenseYears));
+        var response = await client.PostAsJsonAsync("/api/v1/offers", TestApi.OfferBody(age: age, licenseYears: licenseYears));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -69,7 +69,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers", new { carId = 1 });
+        var response = await client.PostAsJsonAsync("/api/v1/offers", new { carId = 1 });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -80,7 +80,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers",
+        var response = await client.PostAsJsonAsync("/api/v1/offers",
             TestApi.OfferBody(start: new DateOnly(2026, 10, 1), end: new DateOnly(2026, 10, 3)));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -92,7 +92,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers",
+        var response = await client.PostAsJsonAsync("/api/v1/offers",
             TestApi.OfferBody(start: TestApi.End, end: TestApi.Start));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -104,7 +104,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers",
+        var response = await client.PostAsJsonAsync("/api/v1/offers",
             TestApi.OfferBody(start: TestApi.Start, end: TestApi.Start.AddDays(31)));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -116,7 +116,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers", TestApi.OfferBody(location: "Kraków"));
+        var response = await client.PostAsJsonAsync("/api/v1/offers", TestApi.OfferBody(location: "Kraków"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -127,7 +127,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers", TestApi.OfferBody(location: "warszawa"));
+        var response = await client.PostAsJsonAsync("/api/v1/offers", TestApi.OfferBody(location: "warszawa"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -138,7 +138,7 @@ public class OffersEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.PostAsJsonAsync("/offers", TestApi.OfferBody(carId: 999));
+        var response = await client.PostAsJsonAsync("/api/v1/offers", TestApi.OfferBody(carId: 999));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -151,7 +151,7 @@ public class OffersEndpointTests
         var first = await TestApi.CreateOfferAsync(client);
         await TestApi.CreateRentalAsync(client, first.OfferId);
 
-        var response = await client.PostAsJsonAsync("/offers",
+        var response = await client.PostAsJsonAsync("/api/v1/offers",
             TestApi.OfferBody(start: TestApi.Start.AddDays(1), end: TestApi.End.AddDays(2)));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -165,7 +165,7 @@ public class OffersEndpointTests
         var first = await TestApi.CreateOfferAsync(client);
         await TestApi.CreateRentalAsync(client, first.OfferId);
 
-        var response = await client.PostAsJsonAsync("/offers",
+        var response = await client.PostAsJsonAsync("/api/v1/offers",
             TestApi.OfferBody(start: TestApi.End, end: TestApi.End.AddDays(2)));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

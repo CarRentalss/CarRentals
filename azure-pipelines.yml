@@ -1,72 +1,459 @@
-# CI dla Car Rental API: build, testy z pokryciem, skan podatnych paczek, paczka do wdrożenia.
-# Pipeline w ADO ("Jagna676.CarRentals") czyta ten plik z katalogu głównego repozytorium.
+# CI/CD Car Rentals: etapy Build, Test i Deploy (Azure, dev).
+# Pipeline w ADO "Jagna676.CarRentals" czyta ten plik z katalogu głównego repo na GitHubie.
+#
+# Wersja: Major.Minor.N. Minor = numer checkpointu (KM2 = 1.2.N, KM3 = 1.3.N).
+# N rośnie sam z każdym buildem i zeruje się, gdy zmienimy Major albo Minor.
+# Ta sama wersja trafia do numeru builda, do assembly (-p:Version) i do App Setting APP_VERSION na App Service.
+#
+# Etap Deploy włącza zmienna deployToAzure. Dopóki nie ma subskrypcji, service connection
+# "sc-azure-carrentals", variable group "carrentals-dev" i environment "dev", zostaje 'false'.
+# Warunek ${{ if }} działa przy kompilacji YAML, więc przy 'false' etapu Deploy w ogóle nie ma
+# i ADO nie sprawdza nieistniejących zasobów (inaczej odrzuciłby cały przebieg, razem z Build i Test).
+
+name: $(Major).$(Minor).$(Rev:r)
 
 trigger:
   branches:
     include:
       - main
+      - develop
 
 pr:
   branches:
     include:
       - main
+      - develop
+
+variables:
+  Major: 1
+  Minor: 2
+  buildConfiguration: Release
+  solution: CarRentals.sln
+  carRentalApiProject: backend/CarRental.Api/CarRental.Api.csproj
+  carRentalDbContext: CarRentalDbContext
+  brokerApiProject: backend/Broker.Api/Broker.Api.csproj
+  brokerDbContext: BrokerDbContext
+  brokerWwwroot: backend/Broker.Api/wwwroot
+  frontendDir: frontend
+  dotnetVersion: 10.0.x
+  nodeVersion: 22.x
+  # Próg pokrycia liniami (arkusz: 40%). Jak trzeba na chwilę wyłączyć, enforceCoverage: 'false' (i wpis w ADO dlaczego).
+  minCoverage: 40
+  enforceCoverage: 'true'
+  # Awaryjnie, gdy Docker na agencie nie działa: testFilter: 'Category!=Db' pomija testy DB (Testcontainers). 'all' = wszystkie testy.
+  testFilter: all
+  # Deploy na Azure: 'true' dopiero, gdy są zasoby i połączenia w ADO (opis na górze pliku i w scripts/azure/README.md).
+  deployToAzure: 'false'
+  # Gdzie jest React: 'broker' = frontend/dist w wwwroot Broker API (jedna domena, ciasteczko sesji first-party).
+  frontendHosting: broker
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
 
 pool:
   vmImage: ubuntu-latest
 
-variables:
-  buildConfiguration: Release
-  solution: CarRentals.sln
-  apiProject: backend/CarRental.Api/CarRental.Api.csproj
-  DOTNET_CLI_TELEMETRY_OPTOUT: 1
-  DOTNET_NOLOGO: 1
+stages:
+  # ======================================================================
+  # BUILD: frontend, skan podatności, build z wersją, paczki do wdrożenia, bundle migracji EF
+  # ======================================================================
+  - stage: Build
+    displayName: Build
+    jobs:
+      - job: Build
+        displayName: Build (.NET + React)
+        steps:
+          - script: |
+              echo "Wersja: $(Build.BuildNumber)"
+              set_flag() { echo "##vso[task.setvariable variable=$1;isOutput=true]$2"; echo "$1=$2"; }
+              if [ -f "$(brokerApiProject)" ]; then set_flag hasBroker true; else set_flag hasBroker false; fi
+              if [ -f "$(frontendDir)/package.json" ]; then set_flag hasFrontend true; else set_flag hasFrontend false; fi
+              if ls backend/CarRental.Api/Migrations/*.cs >/dev/null 2>&1; then set_flag hasCarRentalMigrations true; else set_flag hasCarRentalMigrations false; fi
+              if ls backend/Broker.Api/Migrations/*.cs >/dev/null 2>&1; then set_flag hasBrokerMigrations true; else set_flag hasBrokerMigrations false; fi
+            name: detect
+            displayName: Co jest w repo (Broker API, frontend, migracje)
 
-steps:
-  - task: UseDotNet@2
-    displayName: Instalacja .NET 10 SDK
-    inputs:
-      packageType: sdk
-      version: 10.0.x
+          # ---------- Frontend (React + Vite) ----------
+          # Budujemy go przed .NET, bo przy frontendHosting=broker pliki z frontend/dist idą do wwwroot Brokera
+          # jeszcze przed dotnet build (static web assets są zbierane przy buildzie).
+          - task: NodeTool@0
+            displayName: Node $(nodeVersion)
+            condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
+            inputs:
+              versionSpec: $(nodeVersion)
 
-  - script: dotnet restore $(solution)
-    displayName: Restore
+          - script: npm ci
+            displayName: npm ci
+            workingDirectory: $(frontendDir)
+            condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
 
-  - script: dotnet build $(solution) -c $(buildConfiguration) --no-restore
-    displayName: Build (z analizatorami Roslyn)
+          # Skan podatności paczek npm. Build przerywa się od poziomu high.
+          - script: npm audit --audit-level=high
+            displayName: Skan bezpieczeństwa paczek npm
+            workingDirectory: $(frontendDir)
+            condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
 
-  - script: >
-      dotnet test $(solution) -c $(buildConfiguration) --no-build
-      --logger trx
-      --collect "XPlat Code Coverage"
-      --results-directory $(Agent.TempDirectory)/TestResults
-    displayName: Testy jednostkowe i integracyjne
+          - script: npm run lint
+            displayName: npm run lint
+            workingDirectory: $(frontendDir)
+            condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
 
-  - task: PublishTestResults@2
-    displayName: Publikacja wyników testów
-    condition: succeededOrFailed()
-    inputs:
-      testResultsFormat: VSTest
-      testResultsFiles: $(Agent.TempDirectory)/TestResults/**/*.trx
+          - script: npm run build
+            displayName: npm run build
+            workingDirectory: $(frontendDir)
+            condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
+            env:
+              VITE_APP_VERSION: $(Build.BuildNumber)
 
-  - task: PublishCodeCoverageResults@2
-    displayName: Raport pokrycia kodu
-    condition: succeededOrFailed()
-    inputs:
-      summaryFileLocation: $(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml
+          - script: |
+              rm -rf "$(brokerWwwroot)"
+              mkdir -p "$(brokerWwwroot)"
+              cp -r "$(frontendDir)/dist/." "$(brokerWwwroot)/"
+              ls -la "$(brokerWwwroot)"
+            displayName: React (frontend/dist) do wwwroot Broker API
+            condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'), eq(variables['detect.hasBroker'], 'true'), eq(variables['frontendHosting'], 'broker'))
 
-  - script: |
-      dotnet list $(solution) package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
-      if grep -q "has the following vulnerable packages" vulnerable.txt; then
-        echo "##vso[task.logissue type=error]Znaleziono paczki z podatnościami (szczegóły wyżej)."
-        exit 1
-      fi
-    displayName: Skan bezpieczeństwa paczek NuGet
+          # ---------- Backend (.NET) ----------
+          - task: UseDotNet@2
+            displayName: .NET SDK $(dotnetVersion)
+            inputs:
+              packageType: sdk
+              version: $(dotnetVersion)
 
-  - script: dotnet publish $(apiProject) -c $(buildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory)/carrental-api
-    displayName: Publish API
+          - script: dotnet restore $(solution)
+            displayName: dotnet restore
 
-  - task: PublishPipelineArtifact@1
-    displayName: Artefakt do wdrożenia
-    inputs:
-      targetPath: $(Build.ArtifactStagingDirectory)/carrental-api
-      artifact: carrental-api
+          # Skan podatnych paczek NuGet (też tranzytywnych). Build przerywa się, jak coś znajdzie.
+          # Build #3 padł tutaj przez System.Security.Cryptography.Pkcs 9.0.11 (przez Microsoft.Data.SqlClient).
+          # Naprawa: jawna referencja Pkcs w wersji $(PkcsVersion) z Directory.Build.props.
+          - script: |
+              set -o pipefail
+              dotnet list $(solution) package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+              if grep -q "has the following vulnerable packages" vulnerable.txt; then
+                echo "##vso[task.logissue type=error]Znaleziono paczki z podatnościami (szczegóły wyżej). Podbij wersję albo dodaj jawną referencję do poprawionej paczki."
+                exit 1
+              fi
+            displayName: Skan bezpieczeństwa paczek NuGet
+
+          - script: >
+              dotnet build $(solution) -c $(buildConfiguration) --no-restore
+              -p:Version=$(Build.BuildNumber)
+              -p:InformationalVersion=$(Build.BuildNumber)+$(Build.SourceVersion)
+            displayName: dotnet build (z analizatorami Roslyn)
+
+          - script: >
+              dotnet publish $(carRentalApiProject) -c $(buildConfiguration) --no-build
+              -p:Version=$(Build.BuildNumber)
+              -o $(Build.ArtifactStagingDirectory)/carrental-api
+            displayName: Publish Car Rental API
+
+          - script: >
+              dotnet publish $(brokerApiProject) -c $(buildConfiguration) --no-build
+              -p:Version=$(Build.BuildNumber)
+              -o $(Build.ArtifactStagingDirectory)/broker-api
+            displayName: Publish Broker API (z Reactem w wwwroot)
+            condition: and(succeeded(), eq(variables['detect.hasBroker'], 'true'))
+
+          # ---------- Bundle migracji EF ----------
+          # Jeden plik wykonywalny na bazę. W Deploy aktualizuje bazę (stosuje tylko brakujące migracje).
+          # Obok idempotentny skrypt SQL do podglądu albo ręcznego uruchomienia.
+          # Oba API mają IDesignTimeDbContextFactory, więc dotnet ef nie odpala Program.cs.
+          - script: dotnet tool restore
+            displayName: dotnet tool restore (dotnet-ef)
+            condition: and(succeeded(), or(eq(variables['detect.hasCarRentalMigrations'], 'true'), eq(variables['detect.hasBrokerMigrations'], 'true')))
+
+          - script: |
+              set -e
+              mkdir -p $(Build.ArtifactStagingDirectory)/efbundles
+              dotnet ef migrations bundle \
+                --project $(carRentalApiProject) --startup-project $(carRentalApiProject) \
+                --context $(carRentalDbContext) --configuration $(buildConfiguration) \
+                --self-contained --target-runtime linux-x64 --force \
+                --output $(Build.ArtifactStagingDirectory)/efbundles/efbundle-carrental
+              dotnet ef migrations script --idempotent \
+                --project $(carRentalApiProject) --startup-project $(carRentalApiProject) \
+                --context $(carRentalDbContext) --configuration $(buildConfiguration) \
+                --output $(Build.ArtifactStagingDirectory)/efbundles/carrental-idempotent.sql
+            displayName: Bundle migracji CarRental DB
+            condition: and(succeeded(), eq(variables['detect.hasCarRentalMigrations'], 'true'))
+            env:
+              ASPNETCORE_ENVIRONMENT: Development
+
+          - script: |
+              set -e
+              mkdir -p $(Build.ArtifactStagingDirectory)/efbundles
+              dotnet ef migrations bundle \
+                --project $(brokerApiProject) --startup-project $(brokerApiProject) \
+                --context $(brokerDbContext) --configuration $(buildConfiguration) \
+                --self-contained --target-runtime linux-x64 --force \
+                --output $(Build.ArtifactStagingDirectory)/efbundles/efbundle-broker
+              dotnet ef migrations script --idempotent \
+                --project $(brokerApiProject) --startup-project $(brokerApiProject) \
+                --context $(brokerDbContext) --configuration $(buildConfiguration) \
+                --output $(Build.ArtifactStagingDirectory)/efbundles/broker-idempotent.sql
+            displayName: Bundle migracji Broker DB
+            condition: and(succeeded(), eq(variables['detect.hasBrokerMigrations'], 'true'))
+            env:
+              ASPNETCORE_ENVIRONMENT: Development
+
+          # ---------- Artefakty ----------
+          - task: PublishPipelineArtifact@1
+            displayName: 'Artefakt: carrental-api'
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/carrental-api
+              artifact: carrental-api
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Artefakt: broker-api'
+            condition: and(succeeded(), eq(variables['detect.hasBroker'], 'true'))
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/broker-api
+              artifact: broker-api
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Artefakt: efbundles (bundle migracji + skrypty SQL)'
+            condition: and(succeeded(), or(eq(variables['detect.hasCarRentalMigrations'], 'true'), eq(variables['detect.hasBrokerMigrations'], 'true')))
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/efbundles
+              artifact: efbundles
+
+      # Sprawdza, czy obraz Dockera Car Rental API się buduje (wymaganie: da się uruchomić w kontenerze).
+      # Obraz nie jest nigdzie wypychany. Na PR pomijamy, żeby oszczędzać minuty agenta.
+      - job: DockerBuild
+        displayName: Obraz Docker (sprawdzenie)
+        condition: ne(variables['Build.Reason'], 'PullRequest')
+        steps:
+          - script: docker build -f backend/CarRental.Api/Dockerfile -t carrental-api:$(Build.BuildNumber) .
+            displayName: docker build Car Rental API
+
+          # Obraz Brokera sam buduje Reacta (etap node:22), kontekst to katalog główny repo
+          - script: |
+              if [ -f backend/Broker.Api/Dockerfile ]; then
+                docker build -f backend/Broker.Api/Dockerfile -t broker-api:$(Build.BuildNumber) .
+              else
+                echo "Brak backend/Broker.Api/Dockerfile, pomijam."
+              fi
+            displayName: docker build Broker API
+
+  # ======================================================================
+  # TEST: testy jednostkowe i integracyjne (też testy DB na SQL Server w Testcontainers), pokrycie z progiem, testy frontu
+  # ======================================================================
+  - stage: Test
+    displayName: Test
+    dependsOn: Build
+    jobs:
+      - job: TestDotnet
+        displayName: Testy .NET (z pokryciem)
+        steps:
+          - task: UseDotNet@2
+            displayName: .NET SDK $(dotnetVersion)
+            inputs:
+              packageType: sdk
+              version: $(dotnetVersion)
+
+          - script: dotnet restore $(solution)
+            displayName: dotnet restore
+
+          - script: dotnet build $(solution) -c $(buildConfiguration) --no-restore -p:Version=$(Build.BuildNumber)
+            displayName: dotnet build
+
+          # Agent ubuntu-latest ma Dockera, więc tests/CarRental.Api.IntegrationTests (Testcontainers.MsSql)
+          # stawia tu prawdziwy SQL Server w kontenerze. Pokrycie zbiera coverlet (paczka coverlet.collector w projektach testowych).
+          - script: |
+              docker version --format 'Docker {{.Server.Version}}' || echo "Brak Dockera, testy DB (Category=Db) nie przejdą."
+              FILTER=()
+              if [ "$(testFilter)" != "all" ]; then FILTER=(--filter "$(testFilter)"); echo "Filtr testów: $(testFilter)"; fi
+              dotnet test $(solution) -c $(buildConfiguration) --no-build \
+                "${FILTER[@]}" \
+                --logger trx \
+                --collect "XPlat Code Coverage" \
+                --results-directory $(Agent.TempDirectory)/TestResults
+            displayName: dotnet test (jednostkowe, integracyjne, DB)
+
+          - task: PublishTestResults@2
+            displayName: Wyniki testów .NET
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: VSTest
+              testResultsFiles: $(Agent.TempDirectory)/TestResults/**/*.trx
+              testRunTitle: Testy .NET $(Build.BuildNumber)
+
+          # Raport w zakładce Code Coverage. Przy kilku projektach testowych zadanie łączy raporty samo.
+          - task: PublishCodeCoverageResults@2
+            displayName: Raport pokrycia kodu
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: $(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml
+
+          # Próg pokrycia liniami. Liczymy sumę linii ze wszystkich raportów (każda klasa raz, bo projekt testowy
+          # może ładować to samo assembly co inny). Wyłączenie: enforceCoverage = 'false'.
+          - script: |
+              python3 - "$(Agent.TempDirectory)/TestResults" "$(minCoverage)" <<'PY'
+              import glob, sys, xml.etree.ElementTree as ET
+              root, minimum = sys.argv[1], float(sys.argv[2])
+              files = glob.glob(f"{root}/**/coverage.cobertura.xml", recursive=True)
+              if not files:
+                  print("##vso[task.logissue type=error]Brak raportu pokrycia (coverage.cobertura.xml)."); sys.exit(1)
+              lines = {}
+              for f in files:
+                  for cls in ET.parse(f).getroot().iter("class"):
+                      fname = cls.get("filename", "")
+                      # Migracje EF to kod generowany, nie liczymy ich do progu
+                      if "/Migrations/" in fname.replace("\\", "/"):
+                          continue
+                      for ln in cls.iter("line"):
+                          key = (fname, ln.get("number"))
+                          hit = int(ln.get("hits", "0")) > 0
+                          lines[key] = lines.get(key, False) or hit
+              valid = len(lines)
+              covered = sum(1 for v in lines.values() if v)
+              pct = 100.0 * covered / valid if valid else 0.0
+              print(f"Raporty: {len(files)}, linie: {covered}/{valid}")
+              print(f"Pokrycie liniami: {pct:.1f}% (próg {minimum:.0f}%)")
+              if pct < minimum:
+                  print(f"##vso[task.logissue type=error]Pokrycie {pct:.1f}% jest poniżej progu {minimum:.0f}%."); sys.exit(1)
+              PY
+            displayName: Próg pokrycia ($(minCoverage)%)
+            condition: and(succeeded(), eq(variables['enforceCoverage'], 'true'))
+
+      - job: TestFrontend
+        displayName: Testy frontendu (Vitest)
+        steps:
+          - script: |
+              if [ -f "$(frontendDir)/package.json" ]; then echo "##vso[task.setvariable variable=hasFrontend]true"; else echo "##vso[task.setvariable variable=hasFrontend]false"; echo "Brak $(frontendDir)/package.json, pomijam."; fi
+            displayName: Czy jest frontend
+
+          - task: NodeTool@0
+            displayName: Node $(nodeVersion)
+            condition: and(succeeded(), eq(variables['hasFrontend'], 'true'))
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - script: npm ci
+            displayName: npm ci
+            workingDirectory: $(frontendDir)
+            condition: and(succeeded(), eq(variables['hasFrontend'], 'true'))
+
+          # "--run" = jedno uruchomienie bez trybu watch. Raport JUnit idzie do zakładki Tests.
+          - script: npm test -- --run --reporter=default --reporter=junit --outputFile.junit=test-results/junit.xml
+            displayName: npm test
+            workingDirectory: $(frontendDir)
+            condition: and(succeeded(), eq(variables['hasFrontend'], 'true'))
+            env:
+              CI: 'true'
+
+          - task: PublishTestResults@2
+            displayName: Wyniki testów frontendu
+            condition: and(succeededOrFailed(), eq(variables['hasFrontend'], 'true'))
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: $(frontendDir)/test-results/junit.xml
+              testRunTitle: Testy frontendu $(Build.BuildNumber)
+              failTaskOnMissingResultsFile: false
+
+  # ======================================================================
+  # DEPLOY: migracje obu baz, Car Rental API i Broker API (z Reactem) na App Service, smoke test /health.
+  # Tylko z main, nie dla PR, tylko gdy deployToAzure = 'true' (warunek przy kompilacji YAML).
+  # ======================================================================
+  - ${{ if eq(variables.deployToAzure, 'true') }}:
+    - stage: Deploy
+      displayName: Deploy (Azure, dev)
+      dependsOn:
+        - Build
+        - Test
+      condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+      variables:
+        # Sekrety (secret variables): CARRENTAL_DB_CONNECTION, BROKER_DB_CONNECTION
+        - group: carrentals-dev
+        - name: azureServiceConnection
+          value: sc-azure-carrentals
+        # Nazwy App Service są globalnie unikalne. Jak zajęte, dokładamy sufiks (np. -jkm) i zmieniamy tylko tutaj.
+        - name: apiAppName
+          value: app-carrentals-api
+        - name: brokerAppName
+          value: app-carrentals-broker
+        - name: resourceGroup
+          value: rg-carrentals
+      jobs:
+        - deployment: DeployDev
+          displayName: Wdrożenie na dev
+          environment: dev
+          variables:
+            hasBroker: $[ stageDependencies.Build.Build.outputs['detect.hasBroker'] ]
+            hasCarRentalMigrations: $[ stageDependencies.Build.Build.outputs['detect.hasCarRentalMigrations'] ]
+            hasBrokerMigrations: $[ stageDependencies.Build.Build.outputs['detect.hasBrokerMigrations'] ]
+          strategy:
+            runOnce:
+              deploy:
+                steps:
+                  # Artefakty z Build pobierają się same do $(Pipeline.Workspace)/<nazwa artefaktu>.
+
+                  # 1. Bazy: najpierw migracje, potem kod (nowy kod zakłada nowy schemat).
+                  #    Agent musi dojść do Azure SQL (firewall: AllowAzureServices).
+                  - script: |
+                      set -e
+                      chmod +x "$(Pipeline.Workspace)/efbundles/efbundle-carrental"
+                      "$(Pipeline.Workspace)/efbundles/efbundle-carrental" --connection "$CARRENTAL_DB_CONNECTION"
+                    displayName: Aktualizacja CarRental DB (EF migrations bundle)
+                    condition: and(succeeded(), eq(variables['hasCarRentalMigrations'], 'true'))
+                    env:
+                      CARRENTAL_DB_CONNECTION: $(CARRENTAL_DB_CONNECTION)
+                      ConnectionStrings__CarRentalDb: $(CARRENTAL_DB_CONNECTION)
+
+                  - script: |
+                      set -e
+                      chmod +x "$(Pipeline.Workspace)/efbundles/efbundle-broker"
+                      "$(Pipeline.Workspace)/efbundles/efbundle-broker" --connection "$BROKER_DB_CONNECTION"
+                    displayName: Aktualizacja Broker DB (EF migrations bundle)
+                    condition: and(succeeded(), eq(variables['hasBrokerMigrations'], 'true'))
+                    env:
+                      BROKER_DB_CONNECTION: $(BROKER_DB_CONNECTION)
+                      ConnectionStrings__BrokerDb: $(BROKER_DB_CONNECTION)
+
+                  # 2. Car Rental API (Linux, .NET 10). Klucze, connection string i AzureAd są w Configuration App Service.
+                  - task: AzureWebApp@1
+                    displayName: Deploy Car Rental API ($(apiAppName))
+                    inputs:
+                      azureSubscription: $(azureServiceConnection)
+                      appType: webAppLinux
+                      appName: $(apiAppName)
+                      package: $(Pipeline.Workspace)/carrental-api
+                      runtimeStack: 'DOTNETCORE|10.0'
+                      appSettings: -APP_VERSION $(Build.BuildNumber)
+
+                  # 3. Broker API razem z Reactem w wwwroot (skopiowanym w Build przed publish).
+                  - task: AzureWebApp@1
+                    displayName: Deploy Broker API ($(brokerAppName))
+                    condition: and(succeeded(), eq(variables['hasBroker'], 'true'))
+                    inputs:
+                      azureSubscription: $(azureServiceConnection)
+                      appType: webAppLinux
+                      appName: $(brokerAppName)
+                      package: $(Pipeline.Workspace)/broker-api
+                      runtimeStack: 'DOTNETCORE|10.0'
+                      appSettings: -APP_VERSION $(Build.BuildNumber)
+
+                  # 4. Smoke test: GET /health obu aplikacji (adres z az webapp show, bo domena może mieć sufiks).
+                  - task: AzureCLI@2
+                    displayName: Smoke test /health
+                    inputs:
+                      azureSubscription: $(azureServiceConnection)
+                      scriptType: bash
+                      scriptLocation: inlineScript
+                      inlineScript: |
+                        check() {
+                          local app="$1"
+                          local host
+                          host=$(az webapp show --name "$app" --resource-group "$(resourceGroup)" --query defaultHostName -o tsv)
+                          for i in $(seq 1 10); do
+                            code=$(curl -s -o /dev/null -w "%{http_code}" "https://$host/health" || true)
+                            echo "$app, próba $i: HTTP $code"
+                            if [ "$code" = "200" ]; then return 0; fi
+                            sleep 15
+                          done
+                          echo "##vso[task.logissue type=error]$app nie odpowiada na /health po wdrożeniu."
+                          return 1
+                        }
+                        check "$(apiAppName)"
+                        if [ "$(hasBroker)" = "true" ]; then check "$(brokerAppName)"; fi
+                        echo "##vso[build.addbuildtag]deployed-$(Build.BuildNumber)"

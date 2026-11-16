@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CarRental.Api.Controllers;
 
 /// <summary>Oferty z wyceną.</summary>
-[Route("offers")]
+[Route("api/v1/offers")]
 [Authorize(Policy = AuthConstants.BrokerPolicy)]
 public sealed class OffersController(OfferService offers) : ApiControllerBase
 {

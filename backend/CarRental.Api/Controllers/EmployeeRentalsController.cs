@@ -10,7 +10,7 @@ namespace CarRental.Api.Controllers;
 /// <summary>
 /// Endpointy panelu pracownika. Wymagają tokena z rolą Employee, sam klucz brokera nie wystarczy.
 /// </summary>
-[Route("employee/rentals")]
+[Route("api/v1/employee/rentals")]
 [Authorize(Policy = AuthConstants.EmployeePolicy)]
 public sealed class EmployeeRentalsController(EmployeeRentalService employeeRentals) : ApiControllerBase
 {
