@@ -42,7 +42,7 @@ describe('CarDetailsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sprawdź ceny' }))
 
     expect(screen.getByText(/Pytamy wypożyczalnie o ceny/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Szukamy ofert...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Szukamy ofert…' })).toBeDisabled()
 
     const empty: QuoteResult = {
       offers: [],
@@ -91,7 +91,8 @@ describe('CarDetailsPage', () => {
     expect(await screen.findByText('Cena za dzień')).toBeInTheDocument()
     expect(screen.getByText('Ubezpieczenie za dzień')).toBeInTheDocument()
     expect(screen.getByText(/Ważna do \d{2}:\d{2}/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Wynajmij/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Wynajmij/ })).toBeEnabled()
+    expect(screen.getByText(/Wynajem wymaga logowania/)).toBeInTheDocument()
   })
 
   it('nie wysyła wyceny anonimowej bez danych kierowcy', async () => {

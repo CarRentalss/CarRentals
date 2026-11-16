@@ -1,11 +1,11 @@
 # KM2: co musi zrobić człowiek (kolejność)
 
-Claude napisał kod, YAML, skrypty i teksty. Tego, co niżej, Claude nie zrobi, bo wymaga logowania, zgód albo konta konkretnej osoby. Kolejność ma znaczenie: wyżej są rzeczy, które blokują resztę.
+Kod, YAML, skrypty i teksty są w repo. To, co niżej, musi zrobić konkretna osoba, bo wymaga logowania, zgód albo dostępu do konta. Kolejność ma znaczenie: wyżej są rzeczy, które blokują resztę.
 
 ## Pon 16.11 (wieczór)
 
 1. Maks: Azure for Students na koncie PW, potem lista dozwolonych regionów (Policy, Assignments, "Allowed resource deployment regions"). Wynik na grupę.
-2. Maks: .NET 10 SDK obok .NET 8 (migracje EF 10 nie wygenerują się na .NET 8).
+2. Maks: .NET 10 SDK obok .NET 8 przyda się do pracy lokalnej (migracje i tak generuje skrypt przez Dockera).
 3. Maks: 2-minutowy test w entra.microsoft.com, App registrations, New registration. Wynik na grupę.
 4. Jaga: GitHub Education (Student Developer Pack), żeby ruleset działał w prywatnym repo.
 5. Jaga: Settings, Collaborators: Maks i Karolina z rolą Write.
@@ -16,9 +16,9 @@ Claude napisał kod, YAML, skrypty i teksty. Tego, co niżej, Claude nie zrobi, 
 ## Wt 17.11
 
 9. Maks: gałąź develop z main, potem branch `feature/142-pipeline` z nowym azure-pipelines.yml i poprawką Pkcs. PR do develop, review Jaga. Odczytać % pokrycia (zakładka Code Coverage) i wpisać na grupę.
-10. Maks: migracje skryptem `scripts/add-migrations.ps1` (Docker albo .NET 10 SDK). Powstają foldery `backend/CarRental.Api/Migrations` i `backend/Broker.Api/Migrations`. Usunąć starą lokalną bazę z EnsureCreated. Sprawdzić `docker compose up --build`. Commit migracji CarRental (AB#143), migracje Brokera commituje Jaga (AB#66).
+10. Zrobione 16.11: migracje InitialCreate dla obu baz są w `backend/CarRental.Api/Migrations` i `backend/Broker.Api/Migrations` (wygenerowane skryptem `scripts/add-migrations.ps1`). Na czystej bazie `docker compose up --build` stosuje obie migracje, a `scripts\smoke-test.ps1` przechodzi (25/25). Przed pierwszym uruchomieniem z migracjami usunąć starą lokalną bazę: `docker compose down -v`.
 11. Każdy commituje swoje części z AB#id i robi PR do develop z review innej osoby (min. 3 PR z Approve i jednym zdaniem komentarza): Maks Car Rental API i pipeline, Jaga Broker, Karolina front, Postman i docs.
-12. Maks: skrypt `scripts/azure/setup-resources.sh` w Cloud Shell z regionem z punktu 2 (opis w scripts/azure/README.md). Sekrety z `~/carrentals-secrets.env` do menedżera haseł.
+12. Maks: skrypt `scripts/azure/setup-resources.sh` w Cloud Shell z regionem z punktu 1 (opis w scripts/azure/README.md). Sekrety z `~/carrentals-secrets.env` do menedżera haseł.
 13. Maks: service connection `sc-azure-carrentals` (manual, workload identity federation, managed identity id-carrentals-ado), environment `dev` z Branch control na main, variable group `carrentals-dev` z CARRENTAL_DB_CONNECTION i BROKER_DB_CONNECTION jako secret.
 14. Maks: rejestracje Entra carrentals-api i carrentals-broker (kroki w scripts/azure/README.md), clientId i tenantId dla Jagi. Jak tenant PW blokuje: własny tenant albo Google, decyzja z Jagą do śr 12:00.
 15. Jaga: po pierwszym przebiegu pipeline'u na PR ruleset "main i develop" i ustawienia repo (docs/github-ruleset.md), zrzut ekranu.

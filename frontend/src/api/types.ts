@@ -19,7 +19,8 @@ export interface CarListItem {
   make: string
   model: string
   year: number
-  location: string
+  /** W kontrakcie Brokera może być null (inne wypożyczalnie mogą nie podawać miasta). */
+  location: string | null
   available: boolean
 }
 
@@ -157,6 +158,32 @@ export interface EmployeeRentalDetails {
   completedBy: string | null
   returnNote: string | null
   hasAttachment: boolean
+}
+
+export interface CreateRentalRequest {
+  quoteId: string
+  firstName: string
+  lastName: string
+  email: string
+}
+
+/** Wynajem zalogowanego użytkownika ("Moje wypożyczenia"). */
+export interface RentalResponse {
+  rentalId: string
+  provider: ProviderCode
+  providerName: string
+  providerRentalId: string
+  carId: string
+  carLabel: string
+  startDate: string
+  endDate: string
+  totalPrice: number
+  currency: string
+  status: RentalStatus
+  reason: string | null
+  canRequestReturn: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 export interface RentalStatusChangedResponse {

@@ -5,6 +5,8 @@
 # Obie bazy (CarRentalDb i BrokerDb) są na tym samym SQL Serverze. Przy starcie (Development) API robią
 # Migrate, a jak w projekcie nie ma jeszcze migracji, EnsureCreated. Po dodaniu migracji usuń stare bazy:
 #   docker compose down -v
+# Sprawdzenie, że wszystko działa (Windows, drugi terminal): powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+# Port 1433 zajęty przez lokalny SQL Server: SQL_PORT=14330 docker compose up --build (w PowerShell: $env:SQL_PORT=14330)
 services:
   sql:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -12,7 +14,7 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD:-Local_dev_Passw0rd!}"
     ports:
-      - "1433:1433"
+      - "${SQL_PORT:-1433}:1433"
     volumes:
       - sql-data:/var/opt/mssql
     healthcheck:
@@ -29,6 +31,8 @@ services:
     depends_on:
       sql:
         condition: service_healthy
+    # Jak API padnie przy starcie (np. SQL jeszcze tworzy bazy systemowe), Docker uruchomi je jeszcze raz
+    restart: on-failure
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__CarRentalDb: "Server=sql,1433;Database=CarRentalDb;User Id=sa;Password=${SQL_SA_PASSWORD:-Local_dev_Passw0rd!};TrustServerCertificate=True"
@@ -44,6 +48,7 @@ services:
         condition: service_healthy
       carrental-api:
         condition: service_started
+    restart: on-failure
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__BrokerDb: "Server=sql,1433;Database=BrokerDb;User Id=sa;Password=${SQL_SA_PASSWORD:-Local_dev_Passw0rd!};TrustServerCertificate=True"

@@ -2,13 +2,14 @@ import { useCallback, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { createQuote, getCar, getProfile } from '../api/broker'
 import { ApiError, errorMessage, isAbortError } from '../api/client'
-import type { CarDetails, ProfileResponse, QuoteRequest, QuoteResult } from '../api/types'
+import type { CarDetails, ProfileResponse, ProviderOffer, QuoteRequest, QuoteResult } from '../api/types'
 import { useApi } from '../api/useApi'
 import { useAuth } from '../auth/useAuth'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { RentForm } from '../components/RentForm'
 import { SkippedNotice } from '../components/SkippedNotice'
 import { Spinner } from '../components/Spinner'
-import { formatDate, formatMoney, formatTime, todayIso } from '../format'
+import { daysLabel, formatDate, formatMoney, formatTime, todayIso } from '../format'
 
 // Broker kończy wycenę po 15 s, my czekamy chwilę dłużej na odpowiedź z listą pominiętych.
 const CLIENT_TIMEOUT_MS = 20_000
@@ -25,16 +26,21 @@ export function CarDetailsPage() {
 
   return (
     <>
-      <p>
-        <Link to="/cars">Wróć do wyszukiwarki</Link>
-      </p>
-      {car.loading && <Spinner label="Wczytujemy dane auta..." />}
+      <Link to="/cars" className="back-link">
+        Wróć do wyszukiwarki
+      </Link>
+      {car.loading && <Spinner label="Wczytujemy dane auta…" />}
       <ErrorMessage message={car.error} onRetry={car.errorStatus === 404 ? undefined : car.reload} />
+      {car.errorStatus === 404 && (
+        <p className="muted">
+          Auto mogło zniknąć z katalogu wypożyczalni. <Link to="/cars">Wybierz inne auto w wyszukiwarce</Link>.
+        </p>
+      )}
       {car.data && (
         <>
           <CarInfo car={car.data} />
           {authLoading || profile.loading ? (
-            <Spinner label="Wczytujemy dane z profilu..." />
+            <Spinner label="Wczytujemy dane z profilu…" />
           ) : (
             <QuoteSection
               // Formularz startuje z danymi z profilu, gdy już są.
@@ -52,19 +58,27 @@ export function CarDetailsPage() {
 
 function CarInfo({ car }: { car: CarDetails }) {
   return (
-    <section className="card">
+    <section className="car-head">
       <h1>
         {car.make} {car.model}
       </h1>
-      <dl className="details">
-        <dt>Rok produkcji</dt>
-        <dd>{car.year}</dd>
-        <dt>Lokalizacja</dt>
-        <dd>{car.location}</dd>
-        <dt>Wypożyczalnia</dt>
-        <dd>{car.providerName}</dd>
-        <dt>Dostępność</dt>
-        <dd>{car.available ? 'Dostępne (wg katalogu)' : 'Chwilowo niedostępne'}</dd>
+      <dl className="spec">
+        <div>
+          <dt>Rok produkcji</dt>
+          <dd>{car.year}</dd>
+        </div>
+        <div>
+          <dt>Lokalizacja</dt>
+          <dd>{car.location ?? '-'}</dd>
+        </div>
+        <div>
+          <dt>Wypożyczalnia</dt>
+          <dd>{car.providerName}</dd>
+        </div>
+        <div>
+          <dt>Dostępność</dt>
+          <dd>{car.available ? 'Dostępne (wg katalogu)' : 'Chwilowo niedostępne'}</dd>
+        </div>
       </dl>
       <p className="muted small">Dostępność w wybranym terminie sprawdzamy dopiero przy wycenie.</p>
     </section>
@@ -162,55 +176,81 @@ function QuoteSection({ car, profile, isAuthenticated }: QuoteSectionProps) {
     localErrors[field] ?? (error instanceof ApiError ? error.fieldError(field) : undefined)
 
   return (
-    <section className="card">
-      <h2>Sprawdź cenę</h2>
-      {isAuthenticated ? (
-        <p className="muted small">
-          Dane kierowcy wypełniliśmy z profilu. Możesz je zmienić dla tej wyceny, a puste pola uzupełnimy z profilu.
-          {profile && !profile.isComplete && (
-            <>
-              {' '}
-              <Link to="/profile">Uzupełnij profil</Link>, żeby nie wpisywać ich za każdym razem.
-            </>
+    <section className="section" aria-labelledby="quote-title">
+      <div className="quote-layout">
+        <div className="quote-layout__intro">
+          <h2 id="quote-title">Sprawdź cenę</h2>
+          {isAuthenticated ? (
+            <p>
+              Dane kierowcy wypełniliśmy z profilu. Możesz je zmienić dla tej wyceny, a puste pola uzupełnimy z profilu.
+              {profile && !profile.isComplete && (
+                <>
+                  {' '}
+                  <Link to="/profile">Uzupełnij profil</Link>, żeby nie wpisywać ich za każdym razem.
+                </>
+              )}
+            </p>
+          ) : (
+            <p>Bez logowania podaj wszystkie dane. Po zalogowaniu wypełnimy je z profilu.</p>
           )}
-        </p>
-      ) : (
-        <p className="muted small">Bez logowania podaj wszystkie dane. Po zalogowaniu wypełnimy je z profilu.</p>
-      )}
-
-      <form className="form form--grid" onSubmit={onSubmit} noValidate aria-label="Formularz wyceny">
-        <Field label="Od" error={fieldError('startDate')}>
-          <input type="date" value={form.startDate} min={todayIso()} onChange={(e) => update('startDate')(e.target.value)} />
-        </Field>
-        <Field label="Do" error={fieldError('endDate')}>
-          <input type="date" value={form.endDate} min={form.startDate || todayIso()} onChange={(e) => update('endDate')(e.target.value)} />
-        </Field>
-        <Field label="Wiek kierowcy" error={fieldError('age')}>
-          <input type="number" inputMode="numeric" min={18} max={99} value={form.age} onChange={(e) => update('age')(e.target.value)} />
-        </Field>
-        <Field label="Staż prawa jazdy (lata)" error={fieldError('licenseYears')}>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={81}
-            value={form.licenseYears}
-            onChange={(e) => update('licenseYears')(e.target.value)}
-          />
-        </Field>
-        <Field label="Miasto odbioru" error={fieldError('location')}>
-          <input type="text" maxLength={100} value={form.location} onChange={(e) => update('location')(e.target.value)} />
-        </Field>
-        <div className="actions">
-          <button type="submit" className="btn btn--primary" disabled={busy}>
-            {busy ? 'Szukamy ofert...' : 'Sprawdź ceny'}
-          </button>
         </div>
-      </form>
 
-      {busy && <Spinner label="Pytamy wypożyczalnie o ceny, to trwa najwyżej 15 sekund..." />}
+        <form className="form form--grid" onSubmit={onSubmit} noValidate aria-label="Formularz wyceny">
+          <Field label="Od" error={fieldError('startDate')}>
+            <input
+              type="date"
+              value={form.startDate}
+              min={todayIso()}
+              onChange={(e) => update('startDate')(e.target.value)}
+            />
+          </Field>
+          <Field label="Do" error={fieldError('endDate')}>
+            <input
+              type="date"
+              value={form.endDate}
+              min={form.startDate || todayIso()}
+              onChange={(e) => update('endDate')(e.target.value)}
+            />
+          </Field>
+          <Field label="Wiek kierowcy" error={fieldError('age')}>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={18}
+              max={99}
+              value={form.age}
+              onChange={(e) => update('age')(e.target.value)}
+            />
+          </Field>
+          <Field label="Staż prawa jazdy (lata)" error={fieldError('licenseYears')}>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={81}
+              value={form.licenseYears}
+              onChange={(e) => update('licenseYears')(e.target.value)}
+            />
+          </Field>
+          <Field label="Miasto odbioru" error={fieldError('location')}>
+            <input
+              type="text"
+              maxLength={100}
+              value={form.location}
+              onChange={(e) => update('location')(e.target.value)}
+            />
+          </Field>
+          <div className="actions">
+            <button type="submit" className="btn btn--primary" disabled={busy}>
+              {busy ? 'Szukamy ofert…' : 'Sprawdź ceny'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {busy && <Spinner label="Pytamy wypożyczalnie o ceny, to trwa najwyżej 15 sekund…" />}
       {error && <ErrorMessage message={typeof error === 'string' ? error : error.message} />}
-      {result && <Offers result={result} />}
+      {result && <Offers result={result} profile={profile} isAuthenticated={isAuthenticated} />}
     </section>
   )
 }
@@ -220,49 +260,121 @@ function Field({ label, error, children }: { label: string; error?: string; chil
     <label className={error ? 'field field--error' : 'field'}>
       <span>{label}</span>
       {children}
-      {error && <span className="field__error">{error}</span>}
+      {error && (
+        <span className="field__error" role="alert">
+          {error}
+        </span>
+      )}
     </label>
   )
 }
 
-function Offers({ result }: { result: QuoteResult }) {
+interface OffersProps {
+  result: QuoteResult
+  profile: ProfileResponse | null
+  isAuthenticated: boolean
+}
+
+function Offers({ result, profile, isAuthenticated }: OffersProps) {
+  const [renting, setRenting] = useState<string | null>(null)
+
   return (
     <div className="offers">
-      <h3>Oferty</h3>
+      <h2>Oferty</h2>
       {result.offers.length === 0 ? (
-        <div className="alert alert--info">
-          Brak ofert dla podanego terminu i danych kierowcy. Zmień daty albo miasto i spróbuj ponownie.
+        <div className="empty">
+          <h3>Brak ofert</h3>
+          <p>Brak ofert dla podanego terminu i danych kierowcy. Zmień daty albo miasto i spróbuj ponownie.</p>
         </div>
       ) : (
         <ul className="offer-list">
           {result.offers.map((offer) => (
             <li key={offer.quoteId} className="offer">
               <div className="offer__main">
-                <strong>{offer.providerName}</strong>
-                <span className="muted small">{offer.carLabel}</span>
-                <span className="small">
-                  {formatDate(offer.startDate)} - {formatDate(offer.endDate)} ({offer.days} dni)
+                <h3 className="offer__provider">{offer.providerName}</h3>
+                <span>{offer.carLabel}</span>
+                <span className="offer__meta">
+                  {formatDate(offer.startDate)} – {formatDate(offer.endDate)}, {daysLabel(offer.days)}
                 </span>
+                <span className="offer__expiry">Ważna do {formatTime(offer.expiresAt)}</span>
               </div>
-              <dl className="offer__prices">
-                <dt>Cena za dzień</dt>
-                <dd>{formatMoney(offer.dailyPrice, offer.currency)}</dd>
-                <dt>Ubezpieczenie za dzień</dt>
-                <dd>{formatMoney(offer.dailyInsurancePrice, offer.currency)}</dd>
-                <dt>Razem</dt>
-                <dd className="offer__total">{formatMoney(offer.totalPrice, offer.currency)}</dd>
-              </dl>
-              <div className="offer__actions">
-                <span className="small">Ważna do {formatTime(offer.expiresAt)}</span>
-                <button type="button" className="btn" disabled title="Wynajem będzie w KM3">
-                  Wynajmij <small>(KM3)</small>
-                </button>
+              <div className="offer__side">
+                <dl className="offer__prices">
+                  <div>
+                    <dt>Cena za dzień</dt>
+                    <dd>{formatMoney(offer.dailyPrice, offer.currency)}</dd>
+                  </div>
+                  <div>
+                    <dt>Ubezpieczenie za dzień</dt>
+                    <dd>{formatMoney(offer.dailyInsurancePrice, offer.currency)}</dd>
+                  </div>
+                  <div className="offer__sum">
+                    <dt>Razem za {daysLabel(offer.days)}</dt>
+                    <dd className="offer__total">{formatMoney(offer.totalPrice, offer.currency)}</dd>
+                  </div>
+                </dl>
+                {renting !== offer.quoteId && (
+                  <div className="offer__actions">
+                    <RentButton
+                      offer={offer}
+                      isAuthenticated={isAuthenticated}
+                      onRent={() => setRenting(offer.quoteId)}
+                    />
+                  </div>
+                )}
               </div>
+              {renting === offer.quoteId && (
+                <div className="offer__rent">
+                  <RentForm offer={offer} profile={profile} onCancel={() => setRenting(null)} />
+                </div>
+              )}
             </li>
           ))}
         </ul>
       )}
       <SkippedNotice skipped={result.skippedProviders} title="Pominięte wypożyczalnie:" />
     </div>
+  )
+}
+
+function RentButton({
+  offer,
+  isAuthenticated,
+  onRent,
+}: {
+  offer: ProviderOffer
+  isAuthenticated: boolean
+  onRent: () => void
+}) {
+  const { me, login, devLogin } = useAuth()
+
+  if (isAuthenticated) {
+    return (
+      <button
+        type="button"
+        className="btn btn--primary"
+        onClick={onRent}
+        aria-label={`Wynajmij: ${offer.providerName}`}
+      >
+        Wynajmij
+      </button>
+    )
+  }
+
+  // Wycena anonimowa nie ma właściciela, więc po zalogowaniu wracamy na stronę auta i sprawdzamy cenę jeszcze raz.
+  const returnUrl = window.location.pathname
+  return (
+    <>
+      <button
+        type="button"
+        className="btn btn--primary"
+        disabled={me.authMode === 'None'}
+        onClick={() => (me.authMode === 'DevLogin' ? devLogin('Customer', returnUrl) : login(returnUrl))}
+        aria-label={`Wynajmij: ${offer.providerName}`}
+      >
+        Wynajmij
+      </button>
+      <span className="muted small">Wynajem wymaga logowania. Po zalogowaniu sprawdź cenę jeszcze raz.</span>
+    </>
   )
 }

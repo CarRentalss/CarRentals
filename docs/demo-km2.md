@@ -1,4 +1,4 @@
-# Demo na KM2 (19.11.2026), 8-10 minut
+# Demo na KM2 (19.11.2026), 9-11 minut
 
 Scenariusz zakłada, że rzeczy z docs/km2-checklista-ludzie.md są zrobione (deploy, ruleset, Entra, Test Plans). Czego nie zrobimy, pokazujemy wg planu B na dole i mówimy wprost, że to czeka. Każdy pokazuje swoją część kodu i umie o niej powiedzieć dwa zdania. Próba w czwartek rano. Przed zajęciami: App Service rozgrzane 10 minut wcześniej, lokalnie `docker compose up --build` już działa (plan B), w przeglądarce otwarte karty z listy niżej.
 
@@ -18,14 +18,20 @@ Karty do otwarcia: aplikacja (https://app-carrentals-broker.azurewebsites.net al
 4. DevTools, zakładka Network: front woła tylko `/api/v1/...` na tej samej domenie (AJAX).
 5. Wycena dla zajętego terminu albo złego miasta: komunikat "brak ofert" z powodem.
 
-## 3. Logowanie, profil i panel pracownika (Jaga i Karolina, 2 min)
+## 3. Logowanie, profil, wynajem i panel pracownika (Jaga i Karolina, 3 min)
 
-1. Zaloguj (Entra ID albo lokalnie dev-login). Pokazać, że ciasteczko jest HttpOnly.
-2. Profil: komunikat o brakujących danych, uzupełnienie, zapis. Powrót do wyceny: formularz wypełnia się z profilu.
-3. Logowanie jako pracownik (rola Employee): Panel pracownika, lista wynajmów naszej firmy, filtr "do odbioru" (ReturnRequested), szczegóły wynajmu.
-4. Użytkownik bez roli: brak linku w menu, a wejście na adres panelu daje 403.
+Cały przepływ idzie przez UI, bez Postmana. Najlepiej w dwóch oknach: zwykłe okno to klient, okno incognito to pracownik (osobne ciasteczka sesji).
 
-Żeby lista miała dane, wcześniej puścić folder "Car Rental API: proces wynajmu" z Postmana (tylko do kroku 7, zgłoszenie zwrotu) albo kroki ze Swaggera z punktu 4.
+1. Klient: Zaloguj (Entra ID albo lokalnie dev-login "Klient"). Pokazać, że ciasteczko jest HttpOnly.
+2. Profil: komunikat o brakujących danych, uzupełnienie, zapis. Powrót do auta: formularz wyceny wypełnia się z profilu.
+3. Sprawdź ceny, przy ofercie "Wynajmij". Formularz z imieniem, nazwiskiem i emailem z profilu, "Potwierdź wynajem".
+4. Ekran statusu: najpierw "Czeka na potwierdzenie" (Pending), strona sama odświeża status co 3 s, po około 10 s "Potwierdzone". W Network widać `POST /api/v1/rentals` (202) i kolejne `GET /api/v1/rentals/{id}`.
+5. Moje wypożyczenia (menu): wynajem ze statusem Potwierdzone, "Zgłoś zwrot". Status zmienia się na "Zwrot zgłoszony".
+6. Pracownik (incognito, dev-login "Pracownik" albo konto z rolą Employee): Panel pracownika, filtr "Do odbioru", ten sam wynajem z danymi klienta. Szczegóły, notatka i zdjęcie (jpg) albo PDF, potwierdzenie zwrotu. Status Zakończone.
+7. Klient odświeża Moje wypożyczenia: status "Zakończone".
+8. Użytkownik bez roli: brak linku do panelu w menu, a wejście na adres panelu daje 403. Niezalogowany przy "Wynajmij" idzie do logowania i wraca na stronę auta.
+
+Jak coś nie działa w UI, plan B dla danych do panelu: folder "Car Rental API: proces wynajmu" z Postmana albo kroki ze Swaggera z punktu 4.
 
 ## 4. Car Rental API (Maks, 2 min)
 

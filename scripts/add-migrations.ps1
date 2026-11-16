@@ -67,6 +67,10 @@ if ($todo.Count -eq 0) {
 }
 
 $commands = @("dotnet tool restore")
+# dotnet ef sam nie robi restore przed odczytem metadanych projektu
+foreach ($t in $todo) {
+    $commands += "dotnet restore $($t.Project)"
+}
 foreach ($t in $todo) {
     $commands += "dotnet ef migrations add $Name --project $($t.Project) --startup-project $($t.Project) --context $($t.Context)"
 }
@@ -91,12 +95,11 @@ try {
             throw "Nie znaleziono dockera. Uruchom Docker Desktop albo użyj -Local (wymaga .NET 10 SDK)."
         }
 
-        # bin/obj z kontenera mają ścieżki /src/..., więc po wszystkim je usuwamy (lokalny build zrobi je od nowa)
-        $cleanup = ($todo | ForEach-Object {
-            $dir = Split-Path $_.Project -Parent
-            "rm -rf $dir/bin $dir/obj"
-        }) -join " ; "
-        $script = ($commands -join " && ") + " ; status=`$? ; $cleanup ; exit `$status"
+        # Kopiujemy repo w kontenerze bez bin/obj (lokalne obj, np. z net8.0, psują restore),
+        # generujemy migracje w kopii i przenosimy z powrotem tylko foldery Migrations.
+        $dirs = ($todo | ForEach-Object { ($_.Project -replace '\\', '/') -replace '/[^/]+$', '' }) -join " "
+        $copyBack = "for d in $dirs; do if [ -d /work/`$d/Migrations ]; then mkdir -p /src/`$d/Migrations && cp -r /work/`$d/Migrations/. /src/`$d/Migrations/; fi; done"
+        $script = "mkdir -p /work && cd /src && tar --exclude=./frontend/node_modules --exclude=bin --exclude=obj -cf - . | (cd /work && tar -xf -) && cd /work && " + ($commands -join " && ") + " && $copyBack"
 
         Write-Host "> docker run $Image" -ForegroundColor Cyan
         Write-Host "  $($commands -join "`n  ")"

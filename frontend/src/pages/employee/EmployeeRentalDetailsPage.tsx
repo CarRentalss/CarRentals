@@ -5,6 +5,7 @@ import { ApiError, errorMessage } from '../../api/client'
 import type { EmployeeRentalDetails } from '../../api/types'
 import { useApi } from '../../api/useApi'
 import { ErrorMessage } from '../../components/ErrorMessage'
+import { LoginAgain } from '../../components/LoginAgain'
 import { Spinner } from '../../components/Spinner'
 import { STATUS_LABELS, formatDate, formatDateTime, formatMoney } from '../../format'
 
@@ -19,11 +20,12 @@ export function EmployeeRentalDetailsPage() {
 
   return (
     <>
-      <p>
-        <Link to="/employee/rentals">Wróć do listy</Link>
-      </p>
-      {loading && <Spinner label="Wczytujemy wypożyczenie..." />}
+      <Link to="/employee/rentals" className="back-link">
+        Wróć do listy
+      </Link>
+      {loading && <Spinner label="Wczytujemy wypożyczenie…" />}
       <ErrorMessage message={error} onRetry={errorStatus === 404 ? undefined : reload} />
+      <LoginAgain status={errorStatus} />
       {confirmed && (
         <div className="alert alert--success" role="status">
           Zwrot potwierdzony. Wypożyczenie jest zakończone.
@@ -42,7 +44,7 @@ export function EmployeeRentalDetailsPage() {
             />
           ) : (
             data.status !== 'Completed' && (
-              <p className="muted">Zwrot można potwierdzić, gdy klient go zgłosi (status "Do odbioru").</p>
+              <p className="muted">Zwrot można potwierdzić, gdy klient go zgłosi (status „Do odbioru”).</p>
             )
           )}
         </>
@@ -53,11 +55,19 @@ export function EmployeeRentalDetailsPage() {
 
 function RentalInfo({ rental }: { rental: EmployeeRentalDetails }) {
   return (
-    <section className="card">
-      <h1>Wypożyczenie: {rental.car}</h1>
-      <p>
-        <span className={`status status--${rental.status}`}>{STATUS_LABELS[rental.status] ?? rental.status}</span>
-      </p>
+    <section className="narrow">
+      <header className="status-head">
+        <div>
+          <h1>Wypożyczenie: {rental.car}</h1>
+          <span className={`status status--large status--${rental.status}`}>
+            {STATUS_LABELS[rental.status] ?? rental.status}
+          </span>
+        </div>
+        <dl className="price-figure">
+          <dt>Kwota</dt>
+          <dd>{formatMoney(rental.totalPrice)}</dd>
+        </dl>
+      </header>
       <dl className="details">
         <dt>Numer</dt>
         <dd className="mono">{rental.rentalId}</dd>
@@ -67,12 +77,10 @@ function RentalInfo({ rental }: { rental: EmployeeRentalDetails }) {
         </dd>
         <dt>Termin</dt>
         <dd>
-          {formatDate(rental.startDate)} - {formatDate(rental.endDate)}
+          {formatDate(rental.startDate)} – {formatDate(rental.endDate)}
         </dd>
         <dt>Miejsce</dt>
         <dd>{rental.location}</dd>
-        <dt>Kwota</dt>
-        <dd>{formatMoney(rental.totalPrice)}</dd>
         <dt>Broker</dt>
         <dd>{rental.brokerName}</dd>
         <dt>Utworzone</dt>
@@ -159,9 +167,9 @@ function ConfirmReturnForm({ rentalId, onDone }: { rentalId: string; onDone: () 
   }
 
   return (
-    <section className="card">
+    <section className="panel confirm-panel">
       <h2>Potwierdzenie zwrotu</h2>
-      <p className="muted small">Dodaj krótką notatkę o stanie auta i zdjęcie albo PDF (jpg, png, pdf, do 10 MB).</p>
+      <p className="muted">Dodaj krótką notatkę o stanie auta i zdjęcie albo PDF (jpg, png, pdf, do 10 MB).</p>
       <form className="form" onSubmit={onSubmit} noValidate aria-label="Potwierdzenie zwrotu">
         <label className={fieldErrors.note ? 'field field--error' : 'field'}>
           <span>Notatka o stanie auta</span>
@@ -181,7 +189,7 @@ function ConfirmReturnForm({ rentalId, onDone }: { rentalId: string; onDone: () 
         <ErrorMessage message={error} />
         <div className="actions">
           <button type="submit" className="btn btn--primary" disabled={busy}>
-            {busy ? 'Wysyłamy...' : 'Potwierdź zwrot'}
+            {busy ? 'Wysyłamy…' : 'Potwierdź zwrot'}
           </button>
         </div>
       </form>

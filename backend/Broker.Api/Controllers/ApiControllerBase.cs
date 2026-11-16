@@ -24,10 +24,13 @@ public abstract class ApiControllerBase : ControllerBase
             ServiceErrorType.Forbidden => StatusCodes.Status403Forbidden,
             ServiceErrorType.NotFound => StatusCodes.Status404NotFound,
             ServiceErrorType.Conflict => StatusCodes.Status409Conflict,
+            ServiceErrorType.Gone => StatusCodes.Status410Gone,
             ServiceErrorType.Unavailable => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status400BadRequest
         };
 
-        return Problem(title: error.Message, statusCode: statusCode);
+        // JsonResult zamiast Problem(), bo [Produces("application/json")] nadpisałby typ na application/json
+        var problem = ProblemDetailsFactory.CreateProblemDetails(HttpContext, statusCode, error.Message);
+        return new JsonResult(problem) { StatusCode = statusCode, ContentType = "application/problem+json" };
     }
 }

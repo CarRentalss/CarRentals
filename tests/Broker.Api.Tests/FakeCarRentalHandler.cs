@@ -11,6 +11,12 @@ public sealed class FakeCarRentalHandler : HttpMessageHandler
 
     public Func<HttpRequestMessage, HttpResponseMessage>? Responder { get; set; }
 
+    /// <summary>Status zwracany przez GET /api/v1/rentals/{id} (proces w tle już potwierdził wniosek).</summary>
+    public string RentalStatusOnGet { get; set; } = "Confirmed";
+
+    /// <summary>Id wynajmu zwracane przez POST /api/v1/rentals.</summary>
+    public Guid RentalId { get; } = Guid.NewGuid();
+
     public static object[] TwelveCars { get; } = Enumerable.Range(1, 12)
         .Select(i => (object)new { id = i, make = i <= 3 ? "Toyota" : $"Marka{i:00}", model = $"Model{i}", year = 2020 + (i % 5), location = "Warszawa", available = true })
         .ToArray();
@@ -54,6 +60,30 @@ public sealed class FakeCarRentalHandler : HttpMessageHandler
                 // Bez "Z", tak jak bywa z bazy: Broker ma to potraktować jako UTC
                 expiresAt = DateTime.UtcNow.AddMinutes(10).ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)
             });
+        }
+
+        if (request.Method == HttpMethod.Post && path == "/api/v1/rentals")
+        {
+            return Json(HttpStatusCode.Accepted, new { rentalId = RentalId, status = "Pending" });
+        }
+
+        if (request.Method == HttpMethod.Get && path == $"/api/v1/rentals/{RentalId}")
+        {
+            return Json(HttpStatusCode.OK, new
+            {
+                rentalId = RentalId,
+                status = RentalStatusOnGet,
+                reason = (string?)null,
+                carId = 1,
+                startDate = "2026-12-01",
+                endDate = "2026-12-04",
+                totalPrice = 540m
+            });
+        }
+
+        if (request.Method == HttpMethod.Post && path == $"/api/v1/rentals/{RentalId}/return")
+        {
+            return Json(HttpStatusCode.OK, new { rentalId = RentalId, status = "ReturnRequested" });
         }
 
         return new HttpResponseMessage(HttpStatusCode.NotFound);

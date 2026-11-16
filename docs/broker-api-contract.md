@@ -13,7 +13,7 @@ Kod kontraktów: `backend/Broker.Api/Contracts/*.cs`. Swagger Brokera: `http://l
 - Błędy: `application/problem+json`.
   - zwykły błąd: `{ "type": "...", "title": "Nie znaleziono samochodu.", "status": 404, "traceId": "..." }`
   - walidacja (400): `{ "title": "One or more validation errors occurred.", "status": 400, "errors": { "endDate": ["Data zakończenia musi być późniejsza niż data rozpoczęcia."] } }`. Klucze w `errors` są w camelCase (tak jak pola JSON).
-- Kody używane w Brokerze: `200`, `204`, `302` (tylko login), `400`, `401`, `403`, `404`, `409`, `503` (wypożyczalnia nie odpowiada albo zwróciła błąd).
+- Kody używane w Brokerze: `200`, `202` (wniosek o wynajem przyjęty), `204`, `302` (tylko login), `400`, `401`, `403`, `404`, `409`, `410` (oferta wygasła), `503` (wypożyczalnia nie odpowiada albo zwróciła błąd).
 - `providerCode` (pole `provider`): `"our"` (nasza wypożyczalnia, włączona na KM2), `"lecturer"` i `"other-group"` (KM3, na KM2 wyłączone). `carId` jest stringiem, bo każda wypożyczalnia ma swoje identyfikatory.
 - `skippedProviders`: lista wypożyczalni, które nie odpowiedziały w limicie 15 s albo zwróciły błąd. Front może pokazać np. "Wypożyczalnia X nie odpowiedziała, pokazujemy oferty pozostałych".
 
@@ -31,6 +31,10 @@ Kod kontraktów: `backend/Broker.Api/Contracts/*.cs`. Swagger Brokera: `http://l
 | `GET /api/v1/cars/makes` | anonim | marki i modele (landing page) |
 | `GET /api/v1/cars/{provider}/{carId}` | anonim | szczegóły auta |
 | `POST /api/v1/offers` | anonim albo zalogowany | wycena (oferty od wypożyczalni) |
+| `POST /api/v1/rentals` | zalogowany | wynajem z oferty ("Wynajmij") |
+| `GET /api/v1/rentals` | zalogowany | moje wypożyczenia |
+| `GET /api/v1/rentals/{rentalId}` | zalogowany, tylko własne | status wypożyczenia |
+| `POST /api/v1/rentals/{rentalId}/return` | zalogowany, tylko własne | zgłoszenie zwrotu |
 | `GET /api/v1/auth/login?returnUrl=/` | anonim | start logowania (przekierowanie) |
 | `GET /api/v1/auth/dev-login?name=&role=&returnUrl=` | anonim, tylko Development | logowanie deweloperskie |
 | `POST /api/v1/auth/logout` | każdy | wylogowanie |
@@ -144,7 +148,7 @@ Body:
 
 Zalogowany może pominąć `age`, `licenseYears`, `location` (albo dać `null`): Broker liczy wiek i staż na dziś z daty urodzenia i daty prawa jazdy z profilu i bierze lokalizację z profilu. Wartości podane w żądaniu mają pierwszeństwo przed profilem. Jak dalej czegoś brakuje, jest `400` z kluczem pola w `errors`.
 
-Broker pyta wypożyczalnię auta, a od KM3 równolegle także pozostałe włączone wypożyczalnie o auto tej samej marki i modelu w tej samej lokalizacji. Całość trwa najwyżej 15 s, kto nie zdąży, trafia do `skippedProviders`. Każda oferta jest zapisywana w Broker DB (tabela `Quotes`), `quoteId` to jej numer w Brokerze (przyda się w KM3 do "Rent me").
+Broker pyta wypożyczalnię auta, a od KM3 równolegle także pozostałe włączone wypożyczalnie o auto tej samej marki i modelu w tej samej lokalizacji. Całość trwa najwyżej 15 s, kto nie zdąży, trafia do `skippedProviders`. Każda oferta jest zapisywana w Broker DB (tabela `Quotes`), `quoteId` to jej numer w Brokerze (potrzebny do `POST /api/v1/rentals`). Oferta zalogowanego jest przypisana do jego profilu, oferta anonimowa nie ma właściciela, więc do wynajmu trzeba wycenić jeszcze raz po zalogowaniu.
 
 200 (oferty posortowane po `totalPrice` rosnąco):
 ```json
@@ -174,6 +178,72 @@ Broker pyta wypożyczalnię auta, a od KM3 równolegle także pozostałe włącz
 Brak ofert to dalej `200`, tylko `offers: []` (front pokazuje "Brak ofert" i ewentualnie powody z `skippedProviders`, np. `reason: "Rejected", message: "Samochód jest zajęty w wybranym terminie."`).
 
 Błędy: `400` (walidacja, brak `X-CSRF`), `404` (nieznana albo wyłączona wypożyczalnia).
+
+---
+
+### POST /api/v1/rentals
+
+Zalogowany, nagłówki `Content-Type: application/json`, `X-CSRF: 1`. Broker sprawdza, że oferta należy do użytkownika i jeszcze nie wygasła, i składa wniosek w wypożyczalni (`POST /api/v1/rentals` w Car Rental API z `offerId` tej oferty i danymi kierowcy). Front wypełnia dane kierowcy z profilu.
+
+```json
+{
+  "quoteId": "5b0f6f8e-3f8a-4a51-9d55-0a4f1c7b2d11",
+  "firstName": "Jan",
+  "lastName": "Kowalski",
+  "email": "jan.kowalski@example.com"
+}
+```
+
+| Pole | Typ | Zasady |
+|---|---|---|
+| `quoteId` | guid | wymagany, `quoteId` z odpowiedzi `POST /api/v1/offers` |
+| `firstName`, `lastName` | string | wymagane, 1..100 znaków |
+| `email` | string | wymagany, poprawny email, maks. 254 (wypożyczalnia sprawdza go przy zwrocie) |
+
+202 (nagłówek `Location: /api/v1/rentals/{rentalId}`):
+```json
+{
+  "rentalId": "0c9a7d4e-1b2f-4c3d-8e9f-a1b2c3d4e5f6",
+  "provider": "our",
+  "providerName": "Car Rentals",
+  "providerRentalId": "8f6c1c1e-4c43-4b8e-9b1a-1d2f3a4b5c6d",
+  "carId": "1",
+  "carLabel": "Toyota Corolla 2022",
+  "startDate": "2026-11-20",
+  "endDate": "2026-11-23",
+  "totalPrice": 645.0,
+  "currency": "PLN",
+  "status": "Pending",
+  "reason": null,
+  "canRequestReturn": false,
+  "createdAt": "2026-11-16T18:01:00Z",
+  "updatedAt": "2026-11-16T18:01:00Z"
+}
+```
+
+`rentalId` to numer w Brokerze, `providerRentalId` to numer u wypożyczalni (ten sam, który widzi pracownik w panelu). Wypożyczalnia potwierdza wniosek w tle (u nas po około 10 s), więc front po 202 odpytuje `GET /api/v1/rentals/{rentalId}` co 3 s, dopóki status jest `Pending`.
+
+Statusy (`status`): `Pending` (czeka), `Confirmed` (potwierdzony), `Rejected` (odrzucony, powód w `reason`), `ReturnRequested` (klient zgłosił zwrot), `Completed` (pracownik potwierdził zwrot).
+
+Błędy: `400` (walidacja, brak `X-CSRF`), `401`, `404` (nie ma oferty albo nie jest tego użytkownika, np. wycena anonimowa), `409` (oferta już wykorzystana, auto zajęte w terminie; komunikat z wypożyczalni w `title`), `410` (oferta wygasła), `503` (wypożyczalnia nie odpowiada).
+
+Dane z oferty (auto, termin, kwota) Broker kopiuje do tabeli `Rentals`, więc sprzątanie starych ofert (`Quotes`) nie rusza wypożyczeń.
+
+### GET /api/v1/rentals
+
+Zalogowany. Moje wypożyczenia, najnowsze na górze. Dla `Pending` i `ReturnRequested` Broker pyta wypożyczalnię o aktualny status przed odpowiedzią. Jak wypożyczalnia nie odpowiada, zostaje ostatni znany status (bez błędu).
+
+200: tablica obiektów jak w odpowiedzi `POST /api/v1/rentals`. Pusta lista to `[]`. Błędy: `401`.
+
+### GET /api/v1/rentals/{rentalId}
+
+Zalogowany, tylko własne wypożyczenie (cudze daje `404`, żeby nie zdradzać, że istnieje). Status odświeżany jak wyżej. 200: obiekt jak wyżej. Błędy: `401`, `404`.
+
+### POST /api/v1/rentals/{rentalId}/return
+
+Zalogowany, nagłówek `X-CSRF: 1`, bez body. Zgłoszenie zwrotu dla wypożyczenia w statusie `Confirmed` (`canRequestReturn: true`). Broker wysyła do wypożyczalni email kierowcy z wniosku. Potem pracownik widzi wynajem w panelu z filtrem "do odbioru" i potwierdza zwrot (`confirm-return`).
+
+200: obiekt jak wyżej ze statusem `ReturnRequested`. Błędy: `401`, `404`, `409` (zwrot już zgłoszony albo wypożyczenie nie jest aktywne), `503`.
 
 ---
 

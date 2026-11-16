@@ -33,6 +33,8 @@ public abstract class ApiControllerBase : ControllerBase
             _ => StatusCodes.Status400BadRequest
         };
 
-        return Problem(title: error.Message, statusCode: statusCode);
+        // JsonResult zamiast Problem(), bo [Produces("application/json")] nadpisałby typ na application/json
+        var problem = ProblemDetailsFactory.CreateProblemDetails(HttpContext, statusCode, error.Message);
+        return new JsonResult(problem) { StatusCode = statusCode, ContentType = "application/problem+json" };
     }
 }

@@ -28,9 +28,11 @@ export function Navbar() {
           <NavLink to="/cars" className={linkClass} onClick={close}>
             Wyszukiwarka
           </NavLink>
-          <span className="nav__link nav__link--disabled" aria-disabled="true" title="Będzie w KM3">
-            Moje wypożyczenia <small>(KM3)</small>
-          </span>
+          {me.isAuthenticated && (
+            <NavLink to="/rentals" className={linkClass} onClick={close}>
+              Moje wypożyczenia
+            </NavLink>
+          )}
           {me.isAuthenticated && (
             <NavLink to="/profile" className={linkClass} onClick={close}>
               Profil{!me.profileComplete && <span className="badge" title="Profil niekompletny">!</span>}

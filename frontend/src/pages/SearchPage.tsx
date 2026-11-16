@@ -53,56 +53,95 @@ export function SearchPage() {
 
   return (
     <>
-      <h1>Wyszukiwarka aut</h1>
-      <Filters
-        // Nowy klucz przy zmianie URL, żeby formularz wziął wartości z adresu.
-        key={`${make}|${model}|${year ?? ''}`}
-        makes={makes.data ?? []}
-        initial={{ make, model, year: year ? String(year) : '' }}
-        onApply={applyFilters}
-      />
+      <header className="page-head">
+        <h1>Wyszukiwarka aut</h1>
+        <p>Auta ze wszystkich podłączonych wypożyczalni. Cenę sprawdzisz na stronie wybranego auta.</p>
+      </header>
+      <div className="search-layout">
+        <Filters
+          // Nowy klucz przy zmianie URL, żeby formularz wziął wartości z adresu.
+          key={`${make}|${model}|${year ?? ''}`}
+          makes={makes.data ?? []}
+          initial={{ make, model, year: year ? String(year) : '' }}
+          onApply={applyFilters}
+        />
 
-      {cars.loading && <Spinner label="Wczytujemy auta..." />}
-      <ErrorMessage message={cars.error} onRetry={cars.reload} />
+        <section aria-label="Wyniki wyszukiwania">
+          {cars.loading && <Spinner label="Wczytujemy auta…" />}
+          <ErrorMessage message={cars.error} onRetry={cars.reload} />
 
-      {result && (
-        <>
-          <SkippedNotice skipped={result.skippedProviders} />
-          {result.items.length === 0 ? (
-            <div className="alert alert--info">
-              {result.totalCount === 0
-                ? 'Brak aut spełniających kryteria. Zmień albo wyczyść filtry.'
-                : 'Na tej stronie nie ma już wyników.'}
-            </div>
-          ) : (
+          {result && (
             <>
-              <p className="muted">Znaleziono aut: {result.totalCount}</p>
-              <ul className="car-list">
-                {result.items.map((car) => (
-                  <li key={`${car.provider}-${car.carId}`} className="card car-card">
-                    <div>
-                      <h2 className="car-card__title">
-                        {car.make} {car.model}
-                      </h2>
-                      <p className="muted">
-                        Rok {car.year} · {car.location} · {car.providerName}
-                      </p>
-                      {!car.available && <span className="tag tag--warn">Chwilowo niedostępne</span>}
-                    </div>
-                    <Link
-                      className="btn btn--primary"
-                      to={`/cars/${encodeURIComponent(car.provider)}/${encodeURIComponent(car.carId)}`}
+              <SkippedNotice skipped={result.skippedProviders} />
+              {result.items.length === 0 ? (
+                <div className="empty">
+                  <h2>{result.totalCount === 0 ? 'Brak wyników' : 'Ta strona jest pusta'}</h2>
+                  <p>
+                    {result.totalCount === 0
+                      ? 'Brak aut spełniających kryteria. Zmień albo wyczyść filtry.'
+                      : 'Na tej stronie nie ma już wyników.'}
+                  </p>
+                  {result.totalCount === 0 && (make || model || year) && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => applyFilters({ make: '', model: '', year: '' })}
                     >
-                      Szczegóły i ceny
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                      Wyczyść filtry
+                    </button>
+                  )}
+                  {result.totalCount > 0 && (
+                    <button type="button" className="btn" onClick={() => changePage(1)}>
+                      Wróć na pierwszą stronę
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="results-head">
+                    <p className="results-count">Znaleziono aut: {result.totalCount}</p>
+                  </div>
+                  <ul className="car-list">
+                    {result.items.map((car) => {
+                      const href = `/cars/${encodeURIComponent(car.provider)}/${encodeURIComponent(car.carId)}`
+                      return (
+                        <li key={`${car.provider}-${car.carId}`} className="car-card">
+                          <div>
+                            <h2 className="car-card__title">
+                              {car.make} {car.model}
+                            </h2>
+                            <dl className="facts">
+                              <div>
+                                <dt>Rok</dt>
+                                <dd>{car.year}</dd>
+                              </div>
+                              {car.location && (
+                                <div>
+                                  <dt>Miasto</dt>
+                                  <dd>{car.location}</dd>
+                                </div>
+                              )}
+                              <div>
+                                <dt>Wypożyczalnia</dt>
+                                <dd>{car.providerName}</dd>
+                              </div>
+                            </dl>
+                            {!car.available && <span className="tag tag--warn">Chwilowo niedostępne</span>}
+                          </div>
+                          <Link className="btn btn--primary" to={href}>
+                            Szczegóły i ceny
+                          </Link>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
+              <Pagination page={result.page} totalPages={result.totalPages} onPageChange={changePage} />
             </>
           )}
-          <Pagination page={result.page} totalPages={result.totalPages} onPageChange={changePage} />
-        </>
-      )}
+        </section>
+      </div>
     </>
   )
 }
@@ -126,70 +165,74 @@ function Filters({ makes, initial, onApply }: FiltersProps) {
   }
 
   return (
-    <form className="card form form--inline" onSubmit={onSubmit} aria-label="Filtry">
-      <label>
-        Marka
-        <select
-          value={make}
-          onChange={(e) => {
-            setMake(e.target.value)
-            setModel('')
-          }}
-        >
-          <option value="">Wszystkie</option>
-          {/* Marka z URL może nie być jeszcze na liście (lista się wczytuje). */}
-          {make && !makes.some((m) => m.make.toLowerCase() === make.toLowerCase()) && (
-            <option value={make}>{make}</option>
-          )}
-          {makes.map((m) => (
-            <option key={m.make} value={m.make}>
-              {m.make}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Model
-        <select value={model} onChange={(e) => setModel(e.target.value)} disabled={!make}>
-          <option value="">Wszystkie</option>
-          {model && !models.some((m) => m.toLowerCase() === model.toLowerCase()) && (
-            <option value={model}>{model}</option>
-          )}
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Rok produkcji
-        <input
-          type="number"
-          inputMode="numeric"
-          min={1990}
-          max={maxYear}
-          placeholder="np. 2022"
-          value={year}
-          onChange={(e) => setYear(e.target.value)}
-        />
-      </label>
-      <div className="actions">
-        <button type="submit" className="btn btn--primary">
-          Filtruj
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            setMake('')
-            setModel('')
-            setYear('')
-            onApply({ make: '', model: '', year: '' })
-          }}
-        >
-          Wyczyść
-        </button>
+    <form className="filters form" onSubmit={onSubmit} aria-label="Filtry">
+      <h2>Filtry</h2>
+      <div className="form--inline">
+        <label>
+          Marka
+          <select
+            value={make}
+            onChange={(e) => {
+              setMake(e.target.value)
+              setModel('')
+            }}
+          >
+            <option value="">Wszystkie</option>
+            {/* Marka z URL może nie być jeszcze na liście (lista się wczytuje). */}
+            {make && !makes.some((m) => m.make.toLowerCase() === make.toLowerCase()) && (
+              <option value={make}>{make}</option>
+            )}
+            {makes.map((m) => (
+              <option key={m.make} value={m.make}>
+                {m.make}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Model
+          <select value={model} onChange={(e) => setModel(e.target.value)} disabled={!make}>
+            <option value="">Wszystkie</option>
+            {model && !models.some((m) => m.toLowerCase() === model.toLowerCase()) && (
+              <option value={model}>{model}</option>
+            )}
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Rok produkcji
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1990}
+            max={maxYear}
+            name="year"
+            placeholder="np. 2022"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          />
+        </label>
+        <div className="actions">
+          <button type="submit" className="btn btn--primary">
+            Filtruj
+          </button>
+          <button
+            type="button"
+            className="btn btn--quiet"
+            onClick={() => {
+              setMake('')
+              setModel('')
+              setYear('')
+              onApply({ make: '', model: '', year: '' })
+            }}
+          >
+            Wyczyść
+          </button>
+        </div>
       </div>
     </form>
   )
