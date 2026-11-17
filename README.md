@@ -168,7 +168,7 @@ Kontrakt Brokera dla frontu: [docs/broker-api-contract.md](docs/broker-api-contr
 
 ## Dla innej grupy (nasze Car Rental API)
 
-Adres na Azure: https://app-carrentals-api.azurewebsites.net (Swagger: `/swagger`), działa po pierwszym deployu. Lokalnie: http://localhost:5080.
+Adres na Azure: https://app-carrentals-api.azurewebsites.net (Swagger: `/swagger`). Lokalnie: http://localhost:5080.
 
 Uwierzytelnienie: nagłówek `x-api-key` z kluczem, który dostajecie od nas prywatnie (każda grupa ma swój klucz). Bez klucza albo ze złym kluczem jest 401. Każdy broker widzi tylko swoje oferty i wynajmy, cudzy wynajem zwraca 404. Klucz dla was możemy wymienić w każdej chwili, bo trzymamy go w ustawieniach App Service, a nie w kodzie.
 
@@ -259,6 +259,14 @@ npm run lint
 - Postman: proces wynajmu na lokalnym Car Rental API i wywołania Brokera z testami w zakładce Tests: [docs/postman](docs/postman). Import kolekcji i environmentu `local`, potem Runner.
 - Test case'y do ADO Test Plans: [docs/ado/test-cases.md](docs/ado/test-cases.md).
 
+## Azure
+
+Aplikacja na Azure (subskrypcja Azure for Students, resource group `rg-carrentals`):
+- frontend i Broker API: https://app-carrentals-broker.azurewebsites.net
+- Car Rental API: https://app-carrentals-api.azurewebsites.net (Swagger: `/swagger`)
+
+Bazy (`sql-carrentals-jkm`, bazy `sqldb-carrental` i `sqldb-broker`) i App Insights są w regionie swedencentral. Plan App Service B1 jest w italynorth, bo w swedencentral i germanywestcentral nie było wolnych instancji B1 (polityka subskrypcji pozwala na germanywestcentral, swedencentral, switzerlandnorth, italynorth i denmarkeast). Wdraża pipeline z main (etap Deploy), migracje idą przez bundle EF przed wdrożeniem kodu. Logowania Entra na Azure jeszcze nie ma (brak rejestracji aplikacji), więc wyszukiwanie i wycena działają, a logowanie i wynajem na razie tylko lokalnie z dev-login.
+
 ## CI/CD (azure-pipelines.yml)
 
 Pipeline Jagna676.CarRentals w ADO uruchamia się przy każdym PR do develop i main oraz po każdym merge'u.
@@ -267,7 +275,7 @@ Pipeline Jagna676.CarRentals w ADO uruchamia się przy każdym PR do develop i m
 - Test: `dotnet test` całej solucji (też testy bazy w Testcontainers, agent ubuntu-latest ma Dockera), raport pokrycia (coverlet) w zakładce Code Coverage, próg pokrycia liniami 40% (`minCoverage`), testy frontu (Vitest) w zakładce Tests.
 - Deploy (tylko z main, environment `dev`): migracje obu baz przez bundle, Car Rental API i Broker API (z Reactem) na App Service, `APP_VERSION`, smoke test `GET /health`.
 
-Deploy włącza zmienna `deployToAzure` (warunek przy kompilacji YAML). Migracje w Deploy idą tylko wtedy, gdy są w repo, więc najpierw commit folderów Migrations, potem włączenie deployu. Na razie jest `'false'`, bo wymaga service connection `sc-azure-carrentals`, variable group `carrentals-dev` i environment `dev`. Zasoby Azure i kolejność kroków: [scripts/azure/README.md](scripts/azure/README.md).
+Deploy włącza zmienna `deployToAzure` (warunek przy kompilacji YAML). Migracje w Deploy idą tylko wtedy, gdy są w repo, więc najpierw commit folderów Migrations, potem włączenie deployu. Od 17.11 jest `'true'` (service connection `sc-azure-carrentals`, variable group `carrentals-dev` i environment `dev` są założone). Zasoby Azure i kolejność kroków: [scripts/azure/README.md](scripts/azure/README.md).
 
 Sekrety (klucze brokerów, connection stringi, client secret Entra) są w ustawieniach App Service, w ADO Library i lokalnie w User Secrets. W repo są tylko klucze deweloperskie z końcówką "change-me".
 
