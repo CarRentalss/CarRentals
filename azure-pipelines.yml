@@ -424,7 +424,7 @@ stages:
                   - task: AzureWebApp@1
                     displayName: Deploy Car Rental API ($(apiAppName))
                     inputs:
-                      azureSubscription: $(azureServiceConnection)
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
                       appType: webAppLinux
                       appName: $(apiAppName)
                       package: $(Pipeline.Workspace)/carrental-api
@@ -436,7 +436,7 @@ stages:
                     displayName: Deploy Broker API ($(brokerAppName))
                     condition: and(succeeded(), eq(variables['hasBroker'], 'true'))
                     inputs:
-                      azureSubscription: $(azureServiceConnection)
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
                       appType: webAppLinux
                       appName: $(brokerAppName)
                       package: $(Pipeline.Workspace)/broker-api
@@ -447,7 +447,7 @@ stages:
                   - task: AzureCLI@2
                     displayName: Smoke test /health
                     inputs:
-                      azureSubscription: $(azureServiceConnection)
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
                       scriptType: bash
                       scriptLocation: inlineScript
                       inlineScript: |
