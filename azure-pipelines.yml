@@ -5,8 +5,8 @@
 # N rośnie sam z każdym buildem i zeruje się, gdy zmienimy Major albo Minor.
 # Ta sama wersja trafia do numeru builda, do assembly (-p:Version) i do App Setting APP_VERSION na App Service.
 #
-# Etap Deploy włącza zmienna deployToAzure. Dopóki nie ma subskrypcji, service connection
-# "sc-azure-carrentals", variable group "carrentals-dev" i environment "dev", zostaje 'false'.
+# Etap Deploy włącza zmienna deployToAzure. Od 17.11 jest 'true': subskrypcja Azure for Students,
+# service connection "sc-azure-carrentals", variable group "carrentals-dev" i environment "dev" są w ADO.
 # Warunek ${{ if }} działa przy kompilacji YAML, więc przy 'false' etapu Deploy w ogóle nie ma
 # i ADO nie sprawdza nieistniejących zasobów (inaczej odrzuciłby cały przebieg, razem z Build i Test).
 
@@ -43,7 +43,7 @@ variables:
   # Awaryjnie, gdy Docker na agencie nie działa: testFilter: 'Category!=Db' pomija testy DB (Testcontainers). 'all' = wszystkie testy.
   testFilter: all
   # Deploy na Azure: 'true' dopiero, gdy są zasoby i połączenia w ADO (opis na górze pliku i w scripts/azure/README.md).
-  deployToAzure: 'false'
+  deployToAzure: 'true'
   # Gdzie jest React: 'broker' = frontend/dist w wwwroot Broker API (jedna domena, ciasteczko sesji first-party).
   frontendHosting: broker
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
