@@ -5,6 +5,7 @@ import { ApiError, errorMessage, isAbortError } from '../api/client'
 import type { CarDetails, ProfileResponse, ProviderOffer, QuoteRequest, QuoteResult } from '../api/types'
 import { useApi } from '../api/useApi'
 import { useAuth } from '../auth/useAuth'
+import { CarImage } from '../components/CarImage'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { RentForm } from '../components/RentForm'
 import { SkippedNotice } from '../components/SkippedNotice'
@@ -62,6 +63,10 @@ function CarInfo({ car }: { car: CarDetails }) {
       <h1>
         {car.make} {car.model}
       </h1>
+      <figure className="car-head__figure">
+        <CarImage src={car.imageUrl} alt={`${car.make} ${car.model} ${car.year}`} width={600} height={400} />
+        {car.imageUrl && car.imageCredit && <figcaption className="muted small">Zdjęcie: {car.imageCredit}</figcaption>}
+      </figure>
       <dl className="spec">
         <div>
           <dt>Rok produkcji</dt>

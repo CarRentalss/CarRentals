@@ -34,6 +34,10 @@ namespace CarRental.Api.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
 
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<decimal>("InsurancePricePerDay")
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
@@ -70,6 +74,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 1,
                             BasePricePerDay = 150m,
+                            ImageUrl = "toyota-corolla-2022.jpg",
                             InsurancePricePerDay = 30m,
                             IsActive = true,
                             Location = "Warszawa",
@@ -81,6 +86,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 2,
                             BasePricePerDay = 120m,
+                            ImageUrl = "toyota-yaris-2023.jpg",
                             InsurancePricePerDay = 25m,
                             IsActive = true,
                             Location = "Warszawa",
@@ -92,6 +98,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 3,
                             BasePricePerDay = 160m,
+                            ImageUrl = "skoda-octavia-2021.jpg",
                             InsurancePricePerDay = 30m,
                             IsActive = true,
                             Location = "Warszawa",
@@ -103,6 +110,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 4,
                             BasePricePerDay = 155m,
+                            ImageUrl = "volkswagen-golf-2022.jpg",
                             InsurancePricePerDay = 30m,
                             IsActive = true,
                             Location = "Kraków",
@@ -114,6 +122,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 5,
                             BasePricePerDay = 220m,
+                            ImageUrl = "kia-sportage-2023.jpg",
                             InsurancePricePerDay = 40m,
                             IsActive = true,
                             Location = "Kraków",
@@ -125,6 +134,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 6,
                             BasePricePerDay = 130m,
+                            ImageUrl = "hyundai-i30-2020.jpg",
                             InsurancePricePerDay = 25m,
                             IsActive = true,
                             Location = "Kraków",
@@ -136,6 +146,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 7,
                             BasePricePerDay = 140m,
+                            ImageUrl = "ford-focus-2021.jpg",
                             InsurancePricePerDay = 28m,
                             IsActive = true,
                             Location = "Gdańsk",
@@ -147,6 +158,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 8,
                             BasePricePerDay = 115m,
+                            ImageUrl = "renault-clio-2022.jpg",
                             InsurancePricePerDay = 22m,
                             IsActive = true,
                             Location = "Gdańsk",
@@ -158,6 +170,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 9,
                             BasePricePerDay = 320m,
+                            ImageUrl = "bmw-seria-3-2023.jpg",
                             InsurancePricePerDay = 60m,
                             IsActive = true,
                             Location = "Warszawa",
@@ -169,6 +182,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 10,
                             BasePricePerDay = 300m,
+                            ImageUrl = "audi-a4-2022.jpg",
                             InsurancePricePerDay = 55m,
                             IsActive = true,
                             Location = "Wrocław",
@@ -180,6 +194,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 11,
                             BasePricePerDay = 260m,
+                            ImageUrl = "toyota-rav4-2024.jpg",
                             InsurancePricePerDay = 45m,
                             IsActive = true,
                             Location = "Wrocław",
@@ -191,6 +206,7 @@ namespace CarRental.Api.Migrations
                         {
                             Id = 12,
                             BasePricePerDay = 110m,
+                            ImageUrl = "opel-corsa-2021.jpg",
                             InsurancePricePerDay = 20m,
                             IsActive = true,
                             Location = "Poznań",

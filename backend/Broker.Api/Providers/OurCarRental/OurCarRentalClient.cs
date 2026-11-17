@@ -28,6 +28,9 @@ public sealed class OurCarRentalClient(HttpClient http, IOptions<ProvidersOption
 
     public string DisplayName => string.IsNullOrWhiteSpace(Settings.DisplayName) ? "Car Rentals" : Settings.DisplayName;
 
+    /// <summary>Nasza wypożyczalnia jest włączona, dopóki Providers:Our:Enabled nie jest false.</summary>
+    public bool IsEnabled => Settings.Enabled ?? true;
+
     public bool IsConfigured => Settings.IsConfigured;
 
     public async Task<IReadOnlyList<ProviderCar>> GetCarsAsync(CancellationToken cancellationToken)
@@ -197,7 +200,8 @@ public sealed class OurCarRentalClient(HttpClient http, IOptions<ProvidersOption
     }
 
     private static ProviderCar Map(OurCarDto car) =>
-        new(car.Id.ToString(CultureInfo.InvariantCulture), car.Make, car.Model, car.Year, car.Location, car.Available);
+        new(car.Id.ToString(CultureInfo.InvariantCulture), car.Make, car.Model, car.Year, car.Location, car.Available,
+            car.ImageUrl, car.ImageCredit);
 
 }
 

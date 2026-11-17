@@ -5,9 +5,11 @@ using Microsoft.Extensions.Options;
 namespace CarRental.Api.Background;
 
 /// <summary>
-/// Proces w tle po stronie naszej wypożyczalni. Wniosek o wynajem dostaje najpierw status Pending,
-/// a po chwili ten proces go potwierdza (albo odrzuca). Broker w tym czasie odpytuje GET /api/v1/rentals/{id}.
-/// Dzięki temu nasze API zachowuje się tak, jak opisuje projekt: wynik nie jest znany od razu.
+/// Potwierdzanie wniosków w procesie API, gdy nie ma Azure Service Bus (lokalnie, docker compose, testy).
+/// Na Azure z ServiceBus:ConnectionString ten proces nie startuje, wnioski odbiera CarRental.Worker z kolejki.
+/// Logika jest wspólna dla obu trybów: <see cref="RentalConfirmationProcessor"/>.
+/// Wniosek dostaje najpierw status Pending, a po chwili ten proces go potwierdza (albo odrzuca).
+/// Broker w tym czasie odpytuje GET /api/v1/rentals/{id}.
 /// </summary>
 public sealed class RentalConfirmationWorker(
     IServiceScopeFactory scopeFactory,
@@ -23,6 +25,7 @@ public sealed class RentalConfirmationWorker(
             return;
         }
 
+        logger.LogInformation("Potwierdzanie wynajmów w procesie API (bez Service Bus), co {Seconds} s.", settings.PollIntervalSeconds);
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(settings.PollIntervalSeconds));
 
         try
@@ -44,10 +47,10 @@ public sealed class RentalConfirmationWorker(
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
-            var rentals = scope.ServiceProvider.GetRequiredService<RentalService>();
+            var processor = scope.ServiceProvider.GetRequiredService<RentalConfirmationProcessor>();
             var delay = TimeSpan.FromSeconds(options.CurrentValue.ConfirmationDelaySeconds);
 
-            var processed = await rentals.ConfirmPendingAsync(delay, stoppingToken);
+            var processed = await processor.ProcessPendingAsync(delay, stoppingToken);
             if (processed > 0)
             {
                 logger.LogInformation("Przetworzono {Count} wniosków o wynajem.", processed);

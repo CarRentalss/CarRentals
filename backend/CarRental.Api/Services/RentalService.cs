@@ -2,12 +2,17 @@ using System.Data;
 using CarRental.Api.Contracts;
 using CarRental.Api.Data;
 using CarRental.Api.Domain;
+using CarRental.Api.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 namespace CarRental.Api.Services;
 
 /// <summary>Wynajmy po stronie brokera: wniosek, status, zgłoszenie zwrotu (#120, #121, #125, #131, #132).</summary>
-public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILogger<RentalService> logger)
+public sealed class RentalService(
+    CarRentalDbContext db,
+    TimeProvider clock,
+    ILogger<RentalService> logger,
+    IRentalRequestPublisher publisher)
 {
     public async Task<ServiceResult<RentalStatusChangedResponse>> CreateAsync(
         CreateRentalRequest request, string brokerName, CancellationToken cancellationToken)
@@ -15,9 +20,30 @@ public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILo
         // Strategia wykonania jest potrzebna, bo na Azure SQL włączamy ponawianie (EnableRetryOnFailure),
         // a wtedy własną transakcję trzeba w nią opakować.
         var strategy = db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(
+        var result = await strategy.ExecuteAsync(
             token => CreateInTransactionAsync(request, brokerName, token),
             cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            await PublishAsync(result.Value.RentalId, cancellationToken);
+        }
+
+        return result;
+    }
+
+    // Wniosek jest już zapisany (Pending). Jak kolejka nie odpowie, nie psujemy odpowiedzi 202:
+    // Worker co jakiś czas sam zbiera wnioski, które czekają za długo.
+    private async Task PublishAsync(Guid rentalId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await publisher.PublishAsync(rentalId, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Nie udało się wysłać wniosku {RentalId} na kolejkę.", rentalId);
+        }
     }
 
     private async Task<ServiceResult<RentalStatusChangedResponse>> CreateInTransactionAsync(
@@ -123,32 +149,5 @@ public sealed class RentalService(CarRentalDbContext db, TimeProvider clock, ILo
         await db.SaveChangesAsync(cancellationToken);
 
         return new RentalStatusChangedResponse(rental.Id, rental.Status);
-    }
-
-    /// <summary>
-    /// Potwierdza wnioski, które czekają dłużej niż <paramref name="delay"/>.
-    /// Wywołuje to proces w tle (RentalConfirmationWorker). Auto wycofane z floty powoduje odrzucenie.
-    /// </summary>
-    public async Task<int> ConfirmPendingAsync(TimeSpan delay, CancellationToken cancellationToken)
-    {
-        var now = clock.GetUtcNow().UtcDateTime;
-        var cutoff = now - delay;
-
-        var pending = await db.Rentals
-            .Include(r => r.Car)
-            .Where(r => r.Status == RentalStatus.Pending && r.CreatedAtUtc <= cutoff)
-            .ToListAsync(cancellationToken);
-
-        foreach (var rental in pending)
-        {
-            rental.Process(rental.Car.IsActive, now);
-        }
-
-        if (pending.Count > 0)
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-
-        return pending.Count;
     }
 }

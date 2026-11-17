@@ -141,11 +141,17 @@ public sealed class CatalogService(
             return ServiceError.NotFound("Nie znaleziono samochodu.");
         }
 
-        return new CarDetails(provider.Code, provider.DisplayName, car.CarId, car.Make, car.Model, car.Year, car.Location, car.Available);
+        return new CarDetails(provider.Code, provider.DisplayName, car.CarId, car.Make, car.Model, car.Year, car.Location, car.Available,
+            SafeImageUrl(car.ImageUrl), car.ImageCredit);
     }
 
     private static CarListItem ToListItem(ICarRentalProvider provider, ProviderCar car) =>
-        new(provider.Code, provider.DisplayName, car.CarId, car.Make, car.Model, car.Year, car.Location, car.Available);
+        new(provider.Code, provider.DisplayName, car.CarId, car.Make, car.Model, car.Year, car.Location, car.Available,
+            SafeImageUrl(car.ImageUrl), car.ImageCredit);
+
+    /// <summary>Do frontu przepuszczamy tylko pełne adresy https (zdjęcie od wypożyczalni idzie prosto do img src).</summary>
+    internal static string? SafeImageUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri.ToString() : null;
 
     private static bool Matches(string? value, string? filter) =>
         string.IsNullOrWhiteSpace(filter)

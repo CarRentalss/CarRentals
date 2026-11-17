@@ -6,7 +6,15 @@ namespace Broker.Api.Providers.OurCarRental;
 // bo dla Brokera to zewnętrzny system (tak samo jak API prowadzącego i innej grupy).
 
 /// <summary>GET /api/v1/cars, GET /api/v1/cars/{id}.</summary>
-internal sealed record OurCarDto(int Id, string Make, string Model, int Year, string? Location, bool Available);
+internal sealed record OurCarDto(
+    int Id,
+    string Make,
+    string Model,
+    int Year,
+    string? Location,
+    bool Available,
+    string? ImageUrl = null,
+    string? ImageCredit = null);
 
 /// <summary>Body POST /api/v1/offers.</summary>
 internal sealed record OurCreateOfferDto(

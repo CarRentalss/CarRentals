@@ -53,18 +53,29 @@ public class Rental
         string.Equals(Email, email.Trim(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Wynik procesu w tle: potwierdzenie, a gdy auta nie ma już we flocie, odrzucenie.</summary>
-    public void Process(bool carIsActive, DateTime nowUtc)
+    public void Process(bool carIsActive, DateTime nowUtc) => Process(carIsActive, carIsFree: true, nowUtc);
+
+    /// <summary>
+    /// Wynik procesu w tle (Worker albo RentalConfirmationWorker): potwierdzenie albo odrzucenie,
+    /// gdy auto wycofano z floty lub w tym terminie jest już inny wynajem.
+    /// </summary>
+    public void Process(bool carIsActive, bool carIsFree, DateTime nowUtc)
     {
         EnsureStatus(RentalStatus.Pending);
 
-        if (carIsActive)
-        {
-            Status = RentalStatus.Confirmed;
-        }
-        else
+        if (!carIsActive)
         {
             Status = RentalStatus.Rejected;
             Reason = "Samochód został wycofany z floty.";
+        }
+        else if (!carIsFree)
+        {
+            Status = RentalStatus.Rejected;
+            Reason = "Samochód jest już wynajęty w tym terminie.";
+        }
+        else
+        {
+            Status = RentalStatus.Confirmed;
         }
 
         UpdatedAtUtc = nowUtc;

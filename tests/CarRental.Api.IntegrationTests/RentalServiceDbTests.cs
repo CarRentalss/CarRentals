@@ -1,5 +1,6 @@
 using CarRental.Api.Contracts;
 using CarRental.Api.Domain;
+using CarRental.Api.Messaging;
 using CarRental.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,7 +30,7 @@ public sealed class RentalServiceDbTests(SqlServerFixture sql)
         var offer = TestData.Offer();
         db.Offers.Add(offer);
         await db.SaveChangesAsync();
-        var service = new RentalService(db, TimeProvider.System, NullLogger<RentalService>.Instance);
+        var service = new RentalService(db, TimeProvider.System, NullLogger<RentalService>.Instance, new InProcessRentalRequestPublisher());
 
         var result = await service.CreateAsync(Request(offer.Id), "OurBroker", CancellationToken.None);
 
@@ -48,7 +49,7 @@ public sealed class RentalServiceDbTests(SqlServerFixture sql)
         var second = TestData.Offer(carId: 2);
         db.Offers.AddRange(first, second);
         await db.SaveChangesAsync();
-        var service = new RentalService(db, TimeProvider.System, NullLogger<RentalService>.Instance);
+        var service = new RentalService(db, TimeProvider.System, NullLogger<RentalService>.Instance, new InProcessRentalRequestPublisher());
 
         var created = await service.CreateAsync(Request(first.Id), "OurBroker", CancellationToken.None);
         var conflict = await service.CreateAsync(Request(second.Id), "OurBroker", CancellationToken.None);
