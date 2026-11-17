@@ -22,6 +22,10 @@ export interface CarListItem {
   /** W kontrakcie Brokera może być null (inne wypożyczalnie mogą nie podawać miasta). */
   location: string | null
   available: boolean
+  /** Pełny adres zdjęcia (Azure Blob Storage) albo null, gdy wypożyczalnia go nie podaje. */
+  imageUrl?: string | null
+  /** Autor i licencja zdjęcia, np. "Vauxford, CC BY-SA 4.0, Wikimedia Commons". */
+  imageCredit?: string | null
 }
 
 export type CarDetails = CarListItem

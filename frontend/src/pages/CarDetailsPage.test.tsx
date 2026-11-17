@@ -14,6 +14,8 @@ const car: CarDetails = {
   year: 2022,
   location: 'Warszawa',
   available: true,
+  imageUrl: 'https://stcarrentalsjkm.blob.core.windows.net/cars/toyota-corolla-2022.jpg',
+  imageCredit: 'Alexander Migl, CC BY-SA 4.0, Wikimedia Commons',
 }
 
 function setup(respondToQuote: () => Promise<Response>) {
@@ -33,6 +35,14 @@ async function fillDriverData() {
 }
 
 describe('CarDetailsPage', () => {
+  it('pokazuje zdjęcie auta z podpisem autora i licencji', async () => {
+    setup(() => Promise.resolve(jsonResponse({ offers: [], skippedProviders: [] })))
+
+    const image = await screen.findByRole('img', { name: 'Toyota Corolla 2022' })
+    expect(image).toHaveAttribute('src', car.imageUrl)
+    expect(screen.getByText('Zdjęcie: Alexander Migl, CC BY-SA 4.0, Wikimedia Commons')).toBeInTheDocument()
+  })
+
   it('pokazuje spinner w trakcie wyceny i komunikat, gdy nie ma ofert', async () => {
     let resolveQuote: (r: Response) => void = () => {}
     const fetchMock = setup(() => new Promise<Response>((resolve) => (resolveQuote = resolve)))

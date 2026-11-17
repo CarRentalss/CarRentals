@@ -60,6 +60,17 @@ public class DomainTests
     }
 
     [Fact]
+    public void Process_CarTakenInThatTime_RejectsWithReason()
+    {
+        var rental = NewOffer().CreateRental("Jan", "Kowalski", "jan@example.com", Now);
+
+        rental.Process(carIsActive: true, carIsFree: false, Now.AddSeconds(10));
+
+        Assert.Equal(RentalStatus.Rejected, rental.Status);
+        Assert.Contains("wynajęty", rental.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RequestReturn_ConfirmedRental_SetsReturnRequested()
     {
         var rental = NewOffer().CreateRental("Jan", "Kowalski", "jan@example.com", Now);

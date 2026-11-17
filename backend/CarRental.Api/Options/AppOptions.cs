@@ -52,11 +52,37 @@ public sealed class RentalProcessingOptions
     public int PollIntervalSeconds { get; set; } = 5;
 }
 
-/// <summary>Gdzie zapisujemy załączniki. Lokalnie dysk, w KM3 podmienimy na Azure Blob Storage.</summary>
+/// <summary>
+/// Gdzie zapisujemy załączniki. Bez connection stringa do Bloba: dysk (LocalPath).
+/// Na Azure: Storage:BlobConnectionString (albo ConnectionStrings:Blob) i prywatny kontener BlobContainer.
+/// </summary>
 public sealed class StorageOptions
 {
     public const string SectionName = "Storage";
 
     [Required]
     public string LocalPath { get; set; } = "App_Data/attachments";
+
+    public string? BlobConnectionString { get; set; }
+
+    [Required, RegularExpression("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", ErrorMessage = "Nazwa kontenera: 3-63 znaki, małe litery, cyfry i '-'.")]
+    public string BlobContainer { get; set; } = "attachments";
+}
+
+/// <summary>
+/// Zdjęcia aut. W bazie jest sama nazwa pliku (np. toyota-corolla-2022.jpg), pełny adres składamy z BaseUrl,
+/// np. https://stcarrentalsjkm.blob.core.windows.net/cars/. Bez BaseUrl API zwraca imageUrl = null (front pokazuje zaślepkę).
+/// </summary>
+public sealed class ImageOptions
+{
+    public const string SectionName = "Images";
+
+    public string? BaseUrl { get; set; }
+
+    /// <summary>Autor i licencja zdjęcia (Wikimedia Commons), klucz to nazwa pliku.</summary>
+    public Dictionary<string, string> Credits { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool IsValid() =>
+        string.IsNullOrWhiteSpace(BaseUrl)
+        || (Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp));
 }

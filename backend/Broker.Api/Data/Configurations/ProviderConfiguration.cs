@@ -16,7 +16,9 @@ public sealed class ProviderConfiguration : IEntityTypeConfiguration<Provider>
 
         builder.HasIndex(p => p.Code).IsUnique();
 
-        // Na KM2 działa tylko nasza wypożyczalnia. API prowadzącego i innej grupy włączamy w KM3.
+        // Kody muszą się zgadzać z konfiguracją (Providers:Lecturer ma kod lecturer, Providers:OtherGroup ma other-group).
+        // IsEnabled to tylko stan początkowy, potem ProviderRegistry przepisuje go z Providers:<Klucz>:Enabled.
+        // Nowe wypożyczalnie z konfiguracji Registry dopisuje sam, bez migracji.
         builder.HasData(
             new Provider { Id = 1, Code = Provider.OurCode, Name = "Car Rentals", IsEnabled = true },
             new Provider { Id = 2, Code = Provider.LecturerCode, Name = "Wypożyczalnia prowadzącego", IsEnabled = false },

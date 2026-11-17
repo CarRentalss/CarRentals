@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { CarListItem, PagedResult } from '../api/types'
@@ -14,6 +14,7 @@ const allCars: CarListItem[] = Array.from({ length: 7 }, (_, i) => ({
   year: 2020 + (i % 4),
   location: 'Warszawa',
   available: true,
+  imageUrl: i === 0 ? 'https://stcarrentalsjkm.blob.core.windows.net/cars/toyota-corolla-2022.jpg' : null,
 }))
 
 function carsApi() {
@@ -72,5 +73,27 @@ describe('SearchPage', () => {
 
     expect(await screen.findByText(/Brak aut spełniających kryteria/)).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Stronicowanie' })).not.toBeInTheDocument()
+  })
+
+  it('pokazuje zdjęcie auta z alt i lazy, a bez zdjęcia zaślepkę', async () => {
+    carsApi()
+    renderWithRouter(<SearchPage />, { path: '/cars', route: '/cars?make=Toyota' })
+
+    const image = await screen.findByRole('img', { name: 'Toyota Corolla 2020' })
+    expect(image).toHaveAttribute('src', 'https://stcarrentalsjkm.blob.core.windows.net/cars/toyota-corolla-2022.jpg')
+    expect(image).toHaveAttribute('loading', 'lazy')
+    expect(image).toHaveAttribute('width', '240')
+    expect(image).toHaveAttribute('height', '160')
+    expect(screen.getAllByRole('img', { name: /\(brak zdjęcia\)$/ })).toHaveLength(4)
+  })
+
+  it('pokazuje zaślepkę, gdy zdjęcie się nie wczyta', async () => {
+    carsApi()
+    renderWithRouter(<SearchPage />, { path: '/cars', route: '/cars?make=Toyota' })
+
+    const image = await screen.findByRole('img', { name: 'Toyota Corolla 2020' })
+    fireEvent.error(image)
+
+    expect(await screen.findByRole('img', { name: 'Toyota Corolla 2020 (brak zdjęcia)' })).toBeInTheDocument()
   })
 })

@@ -9,6 +9,13 @@
          Wersję wymuszamy w obu API przez $(PkcsVersion). -->
     <PkcsVersion Condition="'$(PkcsVersion)' == '' And '$(AppTargetFramework)' == 'net8.0'">9.0.*</PkcsVersion>
     <PkcsVersion Condition="'$(PkcsVersion)' == ''">10.0.*</PkcsVersion>
+    <!-- System.Security.Cryptography.Xml: testy Brokera dostawały 9.0.18 (GHSA-7hqp-7c5m-4vq6, GHSA-c399-9853-6jmj, GHSA-r955-8q5j-3h83) -->
+    <CryptoXmlVersion Condition="'$(CryptoXmlVersion)' == '' And '$(AppTargetFramework)' == 'net8.0'">9.0.*</CryptoXmlVersion>
+    <CryptoXmlVersion Condition="'$(CryptoXmlVersion)' == ''">10.0.*</CryptoXmlVersion>
+    <!-- SDK usług Azure (KM3), te same wersje w CarRental.Api i CarRental.Worker -->
+    <AzureBlobsVersion Condition="'$(AzureBlobsVersion)' == ''">12.*</AzureBlobsVersion>
+    <AzureServiceBusVersion Condition="'$(AzureServiceBusVersion)' == ''">7.*</AzureServiceBusVersion>
+    <AzureEmailVersion Condition="'$(AzureEmailVersion)' == ''">1.*</AzureEmailVersion>
 
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -1,9 +1,14 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
+using Azure.Messaging.ServiceBus;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Azure.Storage.Blobs;
 using CarRental.Api.Auth;
 using CarRental.Api.Background;
 using CarRental.Api.Data;
+using CarRental.Api.Email;
+using CarRental.Api.Images;
+using CarRental.Api.Messaging;
 using CarRental.Api.Middleware;
 using CarRental.Api.Options;
 using CarRental.Api.Pricing;
@@ -47,6 +52,12 @@ builder.Services.AddOptions<RentalProcessingOptions>()
 builder.Services.AddOptions<StorageOptions>()
     .Bind(builder.Configuration.GetSection(StorageOptions.SectionName))
     .ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddOptions<ImageOptions>()
+    .Bind(builder.Configuration.GetSection(ImageOptions.SectionName))
+    .Validate(o => o.IsValid(), "Images:BaseUrl musi być pełnym adresem http(s), np. https://<konto>.blob.core.windows.net/cars/.")
+    .ValidateOnStart();
+builder.Services.AddOptions<ServiceBusOptions>()
+    .Bind(builder.Configuration.GetSection(ServiceBusOptions.SectionName));
 builder.Services.AddOptions<ApiKeyClientsOptions>()
     .Bind(builder.Configuration.GetSection(ApiKeyClientsOptions.SectionName))
     .Validate(o => o.IsValid(), "Skonfiguruj ApiKeys:Clients (nazwa + unikalny klucz min. 16 znaków dla każdego brokera).")
@@ -66,12 +77,56 @@ if (!builder.Environment.IsEnvironment("Testing"))
 // ---------- Serwisy ----------
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PriceCalculator>();
-builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+builder.Services.AddSingleton<CarImages>();
 builder.Services.AddScoped<CarCatalogService>();
 builder.Services.AddScoped<OfferService>();
 builder.Services.AddScoped<RentalService>();
 builder.Services.AddScoped<EmployeeRentalService>();
-builder.Services.AddHostedService<RentalConfirmationWorker>();
+builder.Services.AddScoped<RentalConfirmationProcessor>();
+
+// ---------- Usługi Azure (Blob, Service Bus, ACS Email) ----------
+// Każda włącza się tylko, gdy jest jej ustawienie. Bez nich (lokalnie, docker compose, testy) działa tryb lokalny:
+// pliki na dysku, potwierdzanie wynajmów w procesie API, maile tylko w logu.
+var startupNotes = new List<string>();
+
+// Załączniki: prywatny kontener Blob albo dysk
+var blobConnection = FirstNotEmpty(
+    builder.Configuration["Storage:BlobConnectionString"],
+    builder.Configuration.GetConnectionString("Blob"));
+if (blobConnection is not null)
+{
+    var containerName = builder.Configuration["Storage:BlobContainer"] ?? "attachments";
+    builder.Services.AddSingleton(_ => new BlobContainerClient(blobConnection, containerName));
+    builder.Services.AddSingleton<IFileStorage, BlobFileStorage>();
+    startupNotes.Add($"Załączniki: Azure Blob Storage, kontener {containerName}.");
+}
+else
+{
+    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+    startupNotes.Add("Załączniki: dysk (Storage:LocalPath).");
+}
+
+// Wnioski o wynajem: kolejka rental-requests i CarRental.Worker albo proces w tle w API
+var serviceBus = builder.Configuration.GetSection(ServiceBusOptions.SectionName).Get<ServiceBusOptions>() ?? new ServiceBusOptions();
+if (serviceBus.IsConfigured)
+{
+    builder.Services.AddSingleton(_ => new ServiceBusClient(serviceBus.ConnectionString));
+    builder.Services.AddSingleton(sp => sp.GetRequiredService<ServiceBusClient>().CreateSender(serviceBus.QueueName));
+    builder.Services.AddSingleton<IRentalRequestPublisher, ServiceBusRentalRequestPublisher>();
+    startupNotes.Add($"Wnioski o wynajem: Azure Service Bus, kolejka {serviceBus.QueueName} (przetwarza CarRental.Worker).");
+}
+else
+{
+    builder.Services.AddSingleton<IRentalRequestPublisher, InProcessRentalRequestPublisher>();
+    builder.Services.AddHostedService<RentalConfirmationWorker>();
+    startupNotes.Add("Wnioski o wynajem: proces w tle w API (brak ServiceBus:ConnectionString).");
+}
+
+// Maile: Azure Communication Services albo log
+builder.Services.AddEmailSender(builder.Configuration);
+startupNotes.Add(builder.Configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()?.IsConfigured == true
+    ? "Maile: Azure Communication Services Email."
+    : "Maile: tylko log (brak Email:ConnectionString lub Email:Sender).");
 
 // ---------- Uwierzytelnianie i autoryzacja ----------
 var authentication = builder.Services
@@ -172,6 +227,11 @@ if (employeeLoginDisabled)
         app.Environment.EnvironmentName);
 }
 
+foreach (var note in startupNotes)
+{
+    app.Logger.LogInformation("{StartupNote}", note);
+}
+
 await InitializeDatabaseAsync(app);
 
 app.UseExceptionHandler();
@@ -227,6 +287,9 @@ static async Task InitializeDatabaseAsync(WebApplication app)
         await db.Database.EnsureCreatedAsync();
     }
 }
+
+static string? FirstNotEmpty(params string?[] values) =>
+    values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
 
 static void AddHeaderScheme(Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions options, string id, string header, string description)
 {

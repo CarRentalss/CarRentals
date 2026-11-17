@@ -143,4 +143,42 @@ public class CarsEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    [Fact]
+    public async Task GetCars_WithImagesBaseUrl_ReturnsFullImageUrlAndCredit()
+    {
+        await using var factory = new CarRentalApiFactory
+        {
+            Settings =
+            {
+                ["Images:BaseUrl"] = "https://sttest.blob.core.windows.net/cars/",
+                ["Images:Credits:toyota-corolla-2022.jpg"] = "Jan Autor, CC BY-SA 4.0, Wikimedia Commons"
+            }
+        };
+        var client = factory.CreateBrokerClient();
+
+        var cars = await client.GetFromJsonAsync<List<CarResponse>>("/api/v1/cars", CarRentalApiFactory.Json);
+        var car = await client.GetFromJsonAsync<CarResponse>("/api/v1/cars/1", CarRentalApiFactory.Json);
+
+        Assert.All(cars!, c => Assert.StartsWith("https://sttest.blob.core.windows.net/cars/", c.ImageUrl, StringComparison.Ordinal));
+        Assert.Equal("https://sttest.blob.core.windows.net/cars/toyota-corolla-2022.jpg", car!.ImageUrl);
+        Assert.Equal("Jan Autor, CC BY-SA 4.0, Wikimedia Commons", car.ImageCredit);
+        // Pozostałe podpisy idą z appsettings.json
+        Assert.Equal("Vauxford, CC BY-SA 4.0, Wikimedia Commons", cars!.Single(c => c.Id == 2).ImageCredit);
+    }
+
+    [Fact]
+    public async Task GetCars_WithoutImagesBaseUrl_ImageUrlIsNull()
+    {
+        await using var factory = new CarRentalApiFactory();
+        var client = factory.CreateBrokerClient();
+
+        var response = await client.GetAsync("/api/v1/cars/1");
+        var json = await response.Content.ReadAsStringAsync();
+        var car = await response.Content.ReadFromJsonAsync<CarResponse>(CarRentalApiFactory.Json);
+
+        // Pole jest w kontrakcie zawsze, lokalnie bez konfiguracji ma wartość null (front pokazuje zaślepkę)
+        Assert.Contains("\"imageUrl\":null", json, StringComparison.Ordinal);
+        Assert.Null(car!.ImageUrl);
+    }
 }
