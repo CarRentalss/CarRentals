@@ -7,6 +7,11 @@
 #   docker compose down -v
 # Sprawdzenie, że wszystko działa (Windows, drugi terminal): powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 # Port 1433 zajęty przez lokalny SQL Server: SQL_PORT=14330 docker compose up --build (w PowerShell: $env:SQL_PORT=14330)
+#
+# Usługi Azure (KM3) lokalnie są wyłączone: załączniki na dysku kontenera, wnioski potwierdza proces w tle w API,
+# maile tylko w logu. Żeby spróbować z prawdziwym Service Bus i osobnym Workerem:
+#   SERVICEBUS_CONNECTION="Endpoint=sb://..." docker compose --profile worker up --build
+# Zdjęcia aut z publicznego kontenera "cars": IMAGES_BASE_URL=https://stcarrentalsjkm.blob.core.windows.net/cars/
 services:
   sql:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -36,8 +41,29 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__CarRentalDb: "Server=sql,1433;Database=CarRentalDb;User Id=sa;Password=${SQL_SA_PASSWORD:-Local_dev_Passw0rd!};TrustServerCertificate=True"
+      # Puste = tryb lokalny (proces w tle w API, bez kolejki)
+      ServiceBus__ConnectionString: "${SERVICEBUS_CONNECTION:-}"
+      Images__BaseUrl: "${IMAGES_BASE_URL:-}"
     ports:
       - "5080:8080"
+
+  # CarRental.Worker: tylko z profilem "worker" (docker compose --profile worker up). Bez SERVICEBUS_CONNECTION
+  # zbiera tylko zaległe wnioski z bazy, więc domyślnie wystarcza proces w tle w API.
+  carrental-worker:
+    profiles: ["worker"]
+    build:
+      context: .
+      dockerfile: backend/CarRental.Worker/Dockerfile
+    depends_on:
+      carrental-api:
+        condition: service_started
+    restart: on-failure
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__CarRentalDb: "Server=sql,1433;Database=CarRentalDb;User Id=sa;Password=${SQL_SA_PASSWORD:-Local_dev_Passw0rd!};TrustServerCertificate=True"
+      ServiceBus__ConnectionString: "${SERVICEBUS_CONNECTION:-}"
+    ports:
+      - "5090:8080"
 
   broker-api:
     build:

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Worker naszej wypożyczalni: odbiera wnioski o wynajem z kolejki Azure Service Bus (rental-requests),
+    potwierdza albo odrzuca je w bazie CarRental DB i wysyła maile.
+    SDK Web, a nie Worker, bo App Service czeka na odpowiedź HTTP (/health), inaczej restartuje aplikację.
+
+    Kod wspólny z Car Rental API jest linkowany z backend/CarRental.Api (te same pliki, bez kopiowania):
+    encje, DbContext z konfiguracją, logika potwierdzania, maile i format wiadomości.
+    Wybraliśmy linkowanie zamiast osobnej biblioteki, bo nie trzeba przenosić DbContextu ani migracji
+    (bundle EF i skrypty add-migrations zostają bez zmian), a testy Brokera dalej widzą CarRental.Api pod aliasem.
+  -->
+  <PropertyGroup>
+    <TargetFramework>$(AppTargetFramework)</TargetFramework>
+    <RootNamespace>CarRental.Worker</RootNamespace>
+    <UserSecretsId>carrental-worker-km3</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CarRental.Api\Domain\**\*.cs" Link="Shared\Domain\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\CarRental.Api\Data\CarRentalDbContext.cs;..\CarRental.Api\Data\SeedData.cs" Link="Shared\Data\%(Filename)%(Extension)" />
+    <Compile Include="..\CarRental.Api\Data\Configurations\**\*.cs" Link="Shared\Data\Configurations\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\CarRental.Api\Email\**\*.cs" Link="Shared\Email\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\CarRental.Api\Messaging\RentalRequestMessage.cs" Link="Shared\Messaging\RentalRequestMessage.cs" />
+    <Compile Include="..\CarRental.Api\Services\RentalConfirmationProcessor.cs;..\CarRental.Api\Services\RentalQueries.cs" Link="Shared\Services\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(AspNetPackagesVersion)" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" Version="$(AzureServiceBusVersion)" />
+    <PackageReference Include="Azure.Communication.Email" Version="$(AzureEmailVersion)" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.*" />
+    <!-- Ta sama poprawka podatności co w API (SqlClient ciągnie starą Pkcs) -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="$(PkcsVersion)" />
+  </ItemGroup>
+
+</Project>

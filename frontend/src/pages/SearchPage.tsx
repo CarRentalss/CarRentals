@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { getCars, getMakes } from '../api/broker'
 import type { MakeModels } from '../api/types'
 import { useApi } from '../api/useApi'
+import { CarImage } from '../components/CarImage'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Pagination } from '../components/Pagination'
 import { SkippedNotice } from '../components/SkippedNotice'
@@ -106,6 +107,13 @@ export function SearchPage() {
                       const href = `/cars/${encodeURIComponent(car.provider)}/${encodeURIComponent(car.carId)}`
                       return (
                         <li key={`${car.provider}-${car.carId}`} className="car-card">
+                          <CarImage
+                            className="car-card__image"
+                            src={car.imageUrl}
+                            alt={`${car.make} ${car.model} ${car.year}`}
+                            width={240}
+                            height={160}
+                          />
                           <div>
                             <h2 className="car-card__title">
                               {car.make} {car.model}

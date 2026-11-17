@@ -765,9 +765,42 @@ select:disabled {
 
 @media (min-width: 640px) {
   .car-card {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 240px 1fr auto;
     align-items: center;
   }
+}
+
+/* Zdjęcia aut (Azure Blob Storage). Stałe proporcje 3:2, zaślepka gdy brak zdjęcia. */
+.car-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  background: var(--mist);
+  border-radius: var(--radius);
+}
+
+.car-card__image {
+  max-width: 240px;
+}
+
+.car-image--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate);
+  font-size: 0.86rem;
+  border: 1px dashed var(--rule-strong);
+}
+
+.car-head__figure {
+  margin: 0 0 24px;
+  max-width: 600px;
+}
+
+.car-head__figure figcaption {
+  margin-top: 6px;
 }
 
 .car-card__title {

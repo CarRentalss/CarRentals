@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using CarRental.Api.Auth;
 using CarRental.Api.Contracts;
 using CarRental.Api.Data;
+using CarRental.Api.Email;
 using CarRental.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -48,6 +49,15 @@ public sealed class CarRentalApiFactory : WebApplicationFactory<Program>
 
     public string StoragePath { get; } = Path.Combine(Path.GetTempPath(), "carrental-tests", Guid.NewGuid().ToString("N"));
 
+    /// <summary>Maile "wysłane" w teście (zamiast ACS i LoggingEmailSender).</summary>
+    public FakeEmailSender Emails { get; } = new();
+
+    /// <summary>Dodatkowe ustawienia dla jednego testu (np. Images:BaseUrl).</summary>
+    public Dictionary<string, string?> Settings { get; } = [];
+
+    /// <summary>Podmiana serwisów dla jednego testu (np. fałszywy Blob albo kolejka).</summary>
+    public Action<IServiceCollection>? ConfigureServices { get; init; }
+
     public static JsonSerializerOptions Json { get; } = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -69,12 +79,15 @@ public sealed class CarRentalApiFactory : WebApplicationFactory<Program>
                 ["Database:ApplyMigrationsOnStartup"] = "false",
                 ["Storage:LocalPath"] = StoragePath
             });
+            config.AddInMemoryCollection(Settings);
         });
 
         builder.ConfigureTestServices(services =>
         {
             services.AddDbContext<CarRentalDbContext>(options => options.UseSqlite(_connection));
             services.AddSingleton<TimeProvider>(Clock);
+            services.AddSingleton<IEmailSender>(Emails);
+            ConfigureServices?.Invoke(services);
         });
     }
 
@@ -107,7 +120,7 @@ public sealed class CarRentalApiFactory : WebApplicationFactory<Program>
     public async Task ConfirmPendingRentalsAsync()
     {
         using var scope = Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<RentalService>().ConfirmPendingAsync(TimeSpan.Zero, CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<RentalConfirmationProcessor>().ProcessPendingAsync(TimeSpan.Zero, CancellationToken.None);
     }
 
     protected override void Dispose(bool disposing)
@@ -133,6 +146,33 @@ public sealed class CarRentalApiFactory : WebApplicationFactory<Program>
         {
             Directory.Delete(StoragePath, recursive: true);
         }
+    }
+}
+
+/// <summary>Zapamiętuje maile zamiast je wysyłać.</summary>
+public sealed class FakeEmailSender : IEmailSender
+{
+    private readonly List<EmailMessage> _sent = [];
+
+    public IReadOnlyList<EmailMessage> Sent
+    {
+        get
+        {
+            lock (_sent)
+            {
+                return _sent.ToList();
+            }
+        }
+    }
+
+    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
+    {
+        lock (_sent)
+        {
+            _sent.Add(message);
+        }
+
+        return Task.CompletedTask;
     }
 }
 

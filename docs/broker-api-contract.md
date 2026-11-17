@@ -14,7 +14,7 @@ Kod kontraktów: `backend/Broker.Api/Contracts/*.cs`. Swagger Brokera: `http://l
   - zwykły błąd: `{ "type": "...", "title": "Nie znaleziono samochodu.", "status": 404, "traceId": "..." }`
   - walidacja (400): `{ "title": "One or more validation errors occurred.", "status": 400, "errors": { "endDate": ["Data zakończenia musi być późniejsza niż data rozpoczęcia."] } }`. Klucze w `errors` są w camelCase (tak jak pola JSON).
 - Kody używane w Brokerze: `200`, `202` (wniosek o wynajem przyjęty), `204`, `302` (tylko login), `400`, `401`, `403`, `404`, `409`, `410` (oferta wygasła), `503` (wypożyczalnia nie odpowiada albo zwróciła błąd).
-- `providerCode` (pole `provider`): `"our"` (nasza wypożyczalnia, włączona na KM2), `"lecturer"` i `"other-group"` (KM3, na KM2 wyłączone). `carId` jest stringiem, bo każda wypożyczalnia ma swoje identyfikatory.
+- `providerCode` (pole `provider`): `"our"` (nasza wypożyczalnia), `"lecturer"` i `"other-group"` (KM3, włączane w konfiguracji Brokera przez `Providers__<Klucz>__Enabled`). Nowa wypożyczalnia z konfiguracji dostaje kod z nazwy sekcji. `carId` jest stringiem, bo każda wypożyczalnia ma swoje identyfikatory.
 - `skippedProviders`: lista wypożyczalni, które nie odpowiedziały w limicie 15 s albo zwróciły błąd. Front może pokazać np. "Wypożyczalnia X nie odpowiedziała, pokazujemy oferty pozostałych".
 
 ```json
@@ -62,7 +62,7 @@ Query (wszystko opcjonalne):
 | `page` | int | numer strony od 1, domyślnie 1 |
 | `pageSize` | int | 1..50, domyślnie 5 |
 
-Sortowanie: marka, model, rok malejąco, wypożyczalnia. Katalog jest w cache Brokera (domyślnie 10 min, maks. 30 min), więc `available` nie gwarantuje dostępności w terminie; sprawdza to dopiero wycena.
+Pola `imageUrl` i `imageCredit` są opcjonalne (opis niżej przy szczegółach auta). Sortowanie: marka, model, rok malejąco, wypożyczalnia. Katalog jest w cache Brokera (domyślnie 10 min, maks. 30 min), więc `available` nie gwarantuje dostępności w terminie; sprawdza to dopiero wycena.
 
 200:
 ```json
@@ -76,7 +76,9 @@ Sortowanie: marka, model, rok malejąco, wypożyczalnia. Katalog jest w cache Br
       "model": "Corolla",
       "year": 2022,
       "location": "Warszawa",
-      "available": true
+      "available": true,
+      "imageUrl": "https://stcarrentalsjkm.blob.core.windows.net/cars/toyota-corolla-2022.jpg",
+      "imageCredit": "Alexander Migl, CC BY-SA 4.0, Wikimedia Commons"
     }
   ],
   "page": 1,
@@ -113,9 +115,13 @@ Przykład: `GET /api/v1/cars/our/1`. Dane są pobierane od wypożyczalni na bie�
   "model": "Corolla",
   "year": 2022,
   "location": "Warszawa",
-  "available": true
+  "available": true,
+  "imageUrl": "https://stcarrentalsjkm.blob.core.windows.net/cars/toyota-corolla-2022.jpg",
+  "imageCredit": "Alexander Migl, CC BY-SA 4.0, Wikimedia Commons"
 }
 ```
+
+`imageUrl` (pełny adres https zdjęcia) i `imageCredit` (autor i licencja zdjęcia) mogą być `null`, wtedy front pokazuje zaślepkę. Adresy inne niż https Broker zamienia na `null`.
 
 Błędy: `404` (nieznana albo wyłączona wypożyczalnia, nie ma auta), `503` (wypożyczalnia nie odpowiada).
 
@@ -442,7 +448,10 @@ Rola `Employee`. `200` z plikiem (`Content-Type` jak w Car Rental API, `Content-
 | `Providers__Our__ApiKey` | (sekret) | klucz `OurBroker` z Car Rental API |
 | `Providers__Our__TimeoutSeconds` | `15` | limit pojedynczego wywołania HttpClient |
 | `Providers__Our__Scope` | `api://<clientId>/access_as_user` | scope do tokena pracownika; puste = liczone z `AzureAd__ClientId` |
-| `Providers__Lecturer__BaseUrl/ApiKey`, `Providers__OtherGroup__BaseUrl/ApiKey` | | KM3 |
+| `Providers__Our__Enabled` | `true` | puste = włączona |
+| `Providers__Lecturer__Enabled`, `Providers__OtherGroup__Enabled` | `true` | KM3, domyślnie wyłączone; jedyne miejsce, gdzie włączamy wypożyczalnię |
+| `Providers__Lecturer__BaseUrl/ApiKey`, `Providers__OtherGroup__BaseUrl/ApiKey` | | adres i klucz (sekret) |
+| `Providers__<Klucz>__Auth__HeaderName` | `x-api-key` | nagłówek z kluczem; inne ustawienia (Bearer, OAuth2, ścieżki, mapowanie pól) w [podpiecie-zewnetrznego-api.md](podpiecie-zewnetrznego-api.md) |
 | `Catalog__CacheMinutes` | `10` | cache katalogu, 1..30 |
 | `AzureAd__Instance` | `https://login.microsoftonline.com/` | |
 | `AzureAd__TenantId` | | |
