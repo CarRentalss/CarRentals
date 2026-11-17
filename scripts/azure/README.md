@@ -139,9 +139,35 @@ az role assignment create --assignee <login_karoliny>@pw.edu.pl --role Contribut
    - Application Insights, Live metrics albo Transaction search: widać requesty.
 4. 10 minut przed demo otworzyć oba adresy, żeby aplikacje się rozgrzały.
 
+### 8. Zewnętrzne wypożyczalnie w KM3 (5 min na każdą)
+
+Jak dostaniemy adres i klucz od prowadzącego albo drugiej grupy, w Cloud Shell:
+
+```bash
+bash enable-provider.sh OtherGroup https://ich-api.azurewebsites.net '<klucz od nich>'
+bash enable-provider.sh Lecturer https://api-prowadzacego.example.com '<klucz>' X-Api-Key   # inny nagłówek niż x-api-key
+bash enable-provider.sh Lecturer --disable                                                 # wyłączenie
+```
+
+Skrypt ustawia App Settings `Providers__<Klucz>__...` w app-carrentals-broker (Type=Generic, Enabled=true, BaseUrl, ApiKey, nagłówek) i restartuje aplikację. Na koniec wypisuje `curl` do sprawdzenia, czy wypożyczalnia jest w katalogu. Gdy ich API ma inne ścieżki albo pola, mapowanie dopisujemy w App Settings według [docs/podpiecie-zewnetrznego-api.md](../../docs/podpiecie-zewnetrznego-api.md).
+
+### 9. Usługi Azure z KM3 (Blob, Service Bus, Worker, ACS Email), 20 min
+
+W Cloud Shell, po `setup-resources.sh`:
+
+```bash
+bash setup-km3.sh swedencentral
+```
+
+Skrypt zakłada `stcarrentalsjkm` (kontenery `attachments` prywatny i `cars` z publicznym odczytem blobów), Service Bus Basic `sb-carrentals-jkm` z kolejką `rental-requests` (klucze SAS: `api-send` tylko Send dla API, `worker-listen` tylko Listen dla Workera), `acs-carrentals-jkm` z Email Service `email-carrentals-jkm` i domeną Azure managed, App Service `app-carrentals-worker` na planie `asp-carrentals` (Always On, health check `/health`) i ustawia App Settings w API i Workerze. Klucze zapisuje w `~/carrentals-km3-secrets.env`. Nazwy kluczy App Settings są w głównym README (sekcja "Usługi Azure i ustawienia"). Zdjęcia aut wgrywamy do `cars` według [docs/zdjecia-aut.md](../../docs/zdjecia-aut.md). Kod Workera wdraża pipeline (artefakt `carrental-worker`), krok jest pomijany, dopóki aplikacji nie ma.
+
+Sprawdzenie: w Log stream API przy starcie "Wnioski o wynajem: Azure Service Bus", w Log stream Workera "Nasłuchuję kolejki rental-requests". Po wynajmie w portalu, Service Bus, kolejka `rental-requests`: licznik wiadomości wraca do 0, a dead-letter jest pusty.
+
 ## Co sprawdzić, jak coś nie działa
 
 - Krok migracji: "Login failed" albo timeout. Sprawdź regułę AllowAzureServices na serwerze SQL i wartość CARRENTAL_DB_CONNECTION w variable group.
 - AzureWebApp@1: "Resource not found". Nazwa aplikacji w YAML inna niż w portalu (sufiks).
 - /health nie odpowiada: App Service, Log stream. Najczęściej brak kluczy ApiKeys__Clients (API nie wstaje bez nich) albo connection stringa.
 - Pipeline w ogóle nie rusza po zmianie na 'true': nie ma service connection, variable group albo environment o tych nazwach.
+- Wniosek wisi w Pending: Log stream Workera (connection string bazy, klucz worker-listen), dead-letter kolejki rental-requests. Worker i tak co minutę zbiera wnioski starsze niż 2 minuty.
+- Brak maili: Email__Sender musi być z połączonej domeny (DoNotReply@<domena>.azurecomm.net), a domena podpięta do acs-carrentals-jkm (Email, Domains, Connect).

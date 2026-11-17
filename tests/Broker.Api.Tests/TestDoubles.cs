@@ -13,6 +13,7 @@ public sealed class FakeProvider(string code, string displayName = "") : ICarRen
 {
     public string Code { get; } = code;
     public string DisplayName { get; } = string.IsNullOrEmpty(displayName) ? code : displayName;
+    public bool IsEnabled { get; set; } = true;
     public bool IsConfigured { get; set; } = true;
 
     public TimeSpan Delay { get; set; } = TimeSpan.Zero;
@@ -86,10 +87,10 @@ public sealed class FakeProvider(string code, string displayName = "") : ICarRen
 public sealed class FakeRegistry(params ICarRentalProvider[] providers) : IProviderRegistry
 {
     public Task<IReadOnlyList<ICarRentalProvider>> GetActiveAsync(CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ICarRentalProvider>>(providers.Where(p => p.IsConfigured).ToList());
+        Task.FromResult<IReadOnlyList<ICarRentalProvider>>(providers.Where(p => p.IsEnabled && p.IsConfigured).ToList());
 
     public Task<ICarRentalProvider?> FindAsync(string code, CancellationToken cancellationToken) =>
-        Task.FromResult(providers.FirstOrDefault(p => p.IsConfigured && p.Code == code));
+        Task.FromResult(providers.FirstOrDefault(p => p.IsEnabled && p.IsConfigured && p.Code == code));
 
     public Task<IReadOnlyDictionary<string, int>> GetEnabledIdsAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyDictionary<string, int>>(providers.Select((p, i) => (p.Code, Id: i + 1)).ToDictionary(x => x.Code, x => x.Id));
@@ -100,6 +101,43 @@ public static class TestFactory
     public static ProviderAggregator Aggregator(double timeoutSeconds = 15) =>
         new(Microsoft.Extensions.Options.Options.Create(new ProvidersOptions { SearchTimeoutSeconds = timeoutSeconds }),
             NullLogger<ProviderAggregator>.Instance);
+}
+
+/// <summary>
+/// Handler HTTP do testów dostawców: odpowiedź z funkcji, zapis żądań (metoda, adres, nagłówki, body).
+/// Opóźnienie respektuje anulowanie, tak jak prawdziwe połączenie.
+/// </summary>
+public sealed class StubHttpHandler(Func<HttpRequestMessage, string?, HttpResponseMessage> respond) : HttpMessageHandler
+{
+    public List<(HttpMethod Method, Uri Uri, Dictionary<string, string> Headers, string? Body)> Requests { get; } = [];
+
+    public TimeSpan Delay { get; set; } = TimeSpan.Zero;
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+        var headers = request.Headers.ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
+        lock (Requests)
+        {
+            Requests.Add((request.Method, request.RequestUri!, headers, body));
+        }
+
+        if (Delay > TimeSpan.Zero)
+        {
+            await Task.Delay(Delay, cancellationToken);
+        }
+
+        return respond(request, body);
+    }
+
+    public static HttpResponseMessage Json(System.Net.HttpStatusCode status, string json) =>
+        new(status) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
+}
+
+/// <summary>IHttpClientFactory, który zawsze daje klienta z tym samym handlerem.</summary>
+public sealed class HandlerHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+{
+    public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
 }
 
 /// <summary>Zegar ustawiany ręcznie.</summary>

@@ -20,6 +20,7 @@ erDiagram
     nvarchar_100 Location
     decimal_10_2 BasePricePerDay
     decimal_10_2 InsurancePricePerDay
+    nvarchar_300 ImageUrl "null, nazwa pliku w kontenerze cars"
     bit IsActive
   }
   Offers {
@@ -138,7 +139,7 @@ erDiagram
   }
 ```
 
-- Seed: 3 wypożyczalnie (our włączona, lecturer i other-group wyłączone do KM3). Adresy i klucze API nie są w bazie, tylko w konfiguracji.
+- Seed: 3 wypożyczalnie (our, lecturer, other-group). Adresy, klucze i włączenie są w konfiguracji (`Providers:<Klucz>:Enabled`), a nie w bazie. Kolumna IsEnabled to tylko podgląd: Broker przepisuje do niej stan z konfiguracji i sam dopisuje wiersz dla nowej wypożyczalni z konfiguracji.
 - Profil trzyma daty (urodzenia, prawa jazdy), a nie wiek i staż. Wiek i staż liczymy na dzień wyceny.
 - Quotes to oferty pokazane użytkownikowi. Usunięcie profilu nie usuwa ofert (SetNull), wypożyczalni z ofertami nie da się usunąć (Restrict).
 - Indeksy: unikalny EntraObjectId (profil szukany po oid z tokena), unikalny Code, Quotes(UserProfileId) i Quotes(ExpiresAtUtc) do sprzątania w tle.

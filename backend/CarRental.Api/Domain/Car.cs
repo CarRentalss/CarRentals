@@ -11,6 +11,12 @@ public class Car
     public decimal BasePricePerDay { get; set; }
     public decimal InsurancePricePerDay { get; set; }
 
+    /// <summary>
+    /// Zdjęcie: nazwa pliku w kontenerze "cars" (np. toyota-corolla-2022.jpg) albo pełny adres https.
+    /// Pełny adres dla brokera składa CarImages z Images:BaseUrl.
+    /// </summary>
+    public string? ImageUrl { get; set; }
+
     /// <summary>Czy auto jest we flocie (wycofane auta nie są pokazywane).</summary>
     public bool IsActive { get; set; } = true;
 

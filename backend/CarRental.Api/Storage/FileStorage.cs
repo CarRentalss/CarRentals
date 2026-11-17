@@ -5,7 +5,8 @@ namespace CarRental.Api.Storage;
 
 /// <summary>
 /// Miejsce na załączniki (zdjęcia, PDF-y, później faktury).
-/// Teraz zapis na dysk, w KM3 dojdzie implementacja dla prywatnego kontenera Azure Blob Storage.
+/// Lokalnie dysk (<see cref="LocalFileStorage"/>), na Azure prywatny kontener Blob Storage (<see cref="BlobFileStorage"/>).
+/// Wybór w Program.cs: Storage:BlobConnectionString albo ConnectionStrings:Blob.
 /// </summary>
 public interface IFileStorage
 {
@@ -30,8 +31,7 @@ public sealed class LocalFileStorage : IFileStorage
 
     public async Task<string> SaveAsync(Stream content, string extension, CancellationToken cancellationToken)
     {
-        // Nazwę pliku generujemy sami, nazwa od użytkownika nigdy nie trafia do ścieżki
-        var key = $"{_clock.GetUtcNow():yyyyMM}/{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        var key = StorageKeys.Create(_clock, extension);
         var fullPath = ToFullPath(key);
 
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
@@ -67,4 +67,20 @@ public sealed class LocalFileStorage : IFileStorage
 
         return fullPath;
     }
+}
+
+/// <summary>Klucze plików wspólne dla dysku i Bloba.</summary>
+public static class StorageKeys
+{
+    /// <summary>Nazwę pliku generujemy sami (rok i miesiąc/guid.rozszerzenie), nazwa od użytkownika nigdy nie trafia do ścieżki.</summary>
+    public static string Create(TimeProvider clock, string extension) =>
+        $"{clock.GetUtcNow():yyyyMM}/{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+
+    /// <summary>Klucz w formacie, który sami tworzymy (bez "..", ukośnika na początku i znaków spoza listy).</summary>
+    public static bool IsValid(string key) =>
+        !string.IsNullOrWhiteSpace(key)
+        && key.Length <= 200
+        && !key.StartsWith('/')
+        && !key.Contains("..", StringComparison.Ordinal)
+        && key.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '.' or '-' or '_');
 }

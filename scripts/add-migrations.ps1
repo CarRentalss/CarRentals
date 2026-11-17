@@ -20,6 +20,8 @@
     .\scripts\add-migrations.ps1 -Local
 .EXAMPLE
     .\scripts\add-migrations.ps1 -Name AddRentalDocuments
+.EXAMPLE
+    .\scripts\add-migrations.ps1 -Name AddCarImageUrl -Context CarRental
 #>
 [CmdletBinding()]
 param(
@@ -27,6 +29,9 @@ param(
     [switch]$Local,
     # Nazwa migracji
     [string]$Name = "InitialCreate",
+    # Dla której bazy: All (obie), CarRental albo Broker. Np. AddCarImageUrl dotyczy tylko CarRental.
+    [ValidateSet("All", "CarRental", "Broker")]
+    [string]$Context = "All",
     # Obraz SDK dla trybu Docker
     [string]$Image = "mcr.microsoft.com/dotnet/sdk:10.0"
 )
@@ -39,9 +44,9 @@ if (-not (Test-Path (Join-Path $repo "CarRentals.sln"))) {
 }
 
 $targets = @(
-    @{ Project = "backend/CarRental.Api/CarRental.Api.csproj"; Context = "CarRentalDbContext" },
-    @{ Project = "backend/Broker.Api/Broker.Api.csproj"; Context = "BrokerDbContext" }
-)
+    @{ Key = "CarRental"; Project = "backend/CarRental.Api/CarRental.Api.csproj"; Context = "CarRentalDbContext" },
+    @{ Key = "Broker"; Project = "backend/Broker.Api/Broker.Api.csproj"; Context = "BrokerDbContext" }
+) | Where-Object { $Context -eq "All" -or $_.Key -eq $Context }
 
 # Wybieramy projekty, które istnieją i nie mają jeszcze migracji o tej nazwie
 $todo = @()

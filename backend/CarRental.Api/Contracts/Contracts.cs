@@ -7,8 +7,18 @@ namespace CarRental.Api.Contracts;
 // Modele zapytań i odpowiedzi zgodne ze szkieletem kontraktu (#26).
 // Pola z wymagań są zawsze, kilka dodatkowych (np. totalPrice) ułatwia życie brokerowi.
 
-/// <summary>Auto z katalogu (GET /api/v1/cars).</summary>
-public sealed record CarResponse(int Id, string Make, string Model, int Year, string Location, bool Available);
+/// <summary>
+/// Auto z katalogu (GET /api/v1/cars). ImageUrl: pełny adres zdjęcia albo null, ImageCredit: autor i licencja zdjęcia albo null.
+/// </summary>
+public sealed record CarResponse(
+    int Id,
+    string Make,
+    string Model,
+    int Year,
+    string Location,
+    bool Available,
+    string? ImageUrl = null,
+    string? ImageCredit = null);
 
 /// <summary>Zapytanie o ofertę (POST /api/v1/offers).</summary>
 public sealed class CreateOfferRequest

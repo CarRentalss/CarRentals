@@ -57,6 +57,32 @@ public sealed class BrokerEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetCars_PassesHttpsImageUrlAndCreditFromCarRentalApi()
+    {
+        _carRental.Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new object[]
+            {
+                new { id = 1, make = "Toyota", model = "Corolla", year = 2022, location = "Warszawa", available = true,
+                      imageUrl = "https://st.blob.core.windows.net/cars/toyota-corolla-2022.jpg", imageCredit = "Autor, CC BY-SA 4.0, Wikimedia Commons" },
+                new { id = 2, make = "Toyota", model = "Yaris", year = 2023, location = "Warszawa", available = true,
+                      imageUrl = "javascript:alert(1)", imageCredit = (string?)null },
+                new { id = 3, make = "Toyota", model = "RAV4", year = 2024, location = "Warszawa", available = true }
+            })
+        };
+        using var client = _factory.CreateBrowserClient();
+
+        var page = await client.GetFromJsonAsync<PagedResult<CarListItem>>("/api/v1/cars?make=Toyota", BrokerApiFactory.Json);
+
+        var corolla = page!.Items.Single(c => c.CarId == "1");
+        Assert.Equal("https://st.blob.core.windows.net/cars/toyota-corolla-2022.jpg", corolla.ImageUrl);
+        Assert.Equal("Autor, CC BY-SA 4.0, Wikimedia Commons", corolla.ImageCredit);
+        // Adres inny niż https nie trafia do img src na froncie
+        Assert.Null(page.Items.Single(c => c.CarId == "2").ImageUrl);
+        Assert.Null(page.Items.Single(c => c.CarId == "3").ImageUrl);
+    }
+
+    [Fact]
     public async Task GetCars_PageSizeTooLarge_Returns400WithCamelCaseField()
     {
         using var client = _factory.CreateBrowserClient();
