@@ -88,9 +88,16 @@ stages:
             workingDirectory: $(frontendDir)
             condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
 
-          # Skan podatności paczek npm. Build przerywa się od poziomu high.
-          - script: npm audit --audit-level=high
+          # Skan podatności paczek npm. Build przerywa się od poziomu high, ale tylko dla paczek,
+          # które trafiają do aplikacji (dependencies). Narzędzia dev (vite, vitest, eslint) nie idą na serwer,
+          # a np. picomatch (GHSA-fc5q-39xc-vjpf) nie ma jeszcze poprawionej wersji, więc dla nich tylko ostrzeżenie w logu.
+          - script: npm audit --omit=dev --audit-level=high
             displayName: Skan bezpieczeństwa paczek npm
+            workingDirectory: $(frontendDir)
+            condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
+
+          - script: npm audit --audit-level=high || echo "##vso[task.logissue type=warning]Podatności w paczkach dev, szczegóły w logu tego kroku."
+            displayName: Skan paczek dev (tylko ostrzeżenie)
             workingDirectory: $(frontendDir)
             condition: and(succeeded(), eq(variables['detect.hasFrontend'], 'true'))
 
