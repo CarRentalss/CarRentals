@@ -6,7 +6,7 @@ namespace CarRental.Api.Background;
 
 /// <summary>
 /// Proces w tle po stronie naszej wypożyczalni. Wniosek o wynajem dostaje najpierw status Pending,
-/// a po chwili ten proces go potwierdza (albo odrzuca). Broker w tym czasie odpytuje GET /rentals/{id}.
+/// a po chwili ten proces go potwierdza (albo odrzuca). Broker w tym czasie odpytuje GET /api/v1/rentals/{id}.
 /// Dzięki temu nasze API zachowuje się tak, jak opisuje projekt: wynik nie jest znany od razu.
 /// </summary>
 public sealed class RentalConfirmationWorker(

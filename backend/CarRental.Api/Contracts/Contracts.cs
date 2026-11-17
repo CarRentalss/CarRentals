@@ -7,10 +7,10 @@ namespace CarRental.Api.Contracts;
 // Modele zapytań i odpowiedzi zgodne ze szkieletem kontraktu (#26).
 // Pola z wymagań są zawsze, kilka dodatkowych (np. totalPrice) ułatwia życie brokerowi.
 
-/// <summary>Auto z katalogu (GET /cars).</summary>
+/// <summary>Auto z katalogu (GET /api/v1/cars).</summary>
 public sealed record CarResponse(int Id, string Make, string Model, int Year, string Location, bool Available);
 
-/// <summary>Zapytanie o ofertę (POST /offers).</summary>
+/// <summary>Zapytanie o ofertę (POST /api/v1/offers).</summary>
 public sealed class CreateOfferRequest
 {
     [Required]
@@ -35,7 +35,7 @@ public sealed class CreateOfferRequest
     public DateOnly? EndDate { get; init; }
 }
 
-/// <summary>Oferta (odpowiedź POST /offers).</summary>
+/// <summary>Oferta (odpowiedź POST /api/v1/offers).</summary>
 public sealed record OfferResponse(
     Guid OfferId,
     int CarId,
@@ -48,7 +48,7 @@ public sealed record OfferResponse(
     int Days,
     DateTime ExpiresAt);
 
-/// <summary>Wniosek o wynajem (POST /rentals).</summary>
+/// <summary>Wniosek o wynajem (POST /api/v1/rentals).</summary>
 public sealed class CreateRentalRequest
 {
     [Required]
@@ -67,7 +67,7 @@ public sealed class CreateRentalRequest
 /// <summary>Odpowiedź po złożeniu wniosku albo zmianie statusu.</summary>
 public sealed record RentalStatusChangedResponse(Guid RentalId, RentalStatus Status);
 
-/// <summary>Status wynajmu (GET /rentals/{rentalId}).</summary>
+/// <summary>Status wynajmu (GET /api/v1/rentals/{rentalId}).</summary>
 public sealed record RentalStatusResponse(
     Guid RentalId,
     RentalStatus Status,
@@ -77,7 +77,7 @@ public sealed record RentalStatusResponse(
     DateOnly EndDate,
     decimal TotalPrice);
 
-/// <summary>Zgłoszenie zwrotu (POST /rentals/{rentalId}/return).</summary>
+/// <summary>Zgłoszenie zwrotu (POST /api/v1/rentals/{rentalId}/return).</summary>
 public sealed class ReturnRequest
 {
     /// <summary>Email klienta, sprawdzamy czy to jego wynajem.</summary>

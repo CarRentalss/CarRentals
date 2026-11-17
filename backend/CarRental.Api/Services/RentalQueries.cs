@@ -6,7 +6,8 @@ public static class RentalQueries
 {
     /// <summary>
     /// Wynajmy, które blokują auto: czekające, potwierdzone i w trakcie zwrotu.
-    /// Odrzucone i zakończone nie blokują.
+    /// Odrzucone i zakończone nie blokują. To samo co Rental.BlocksCar, ale jako wyrażenie,
+    /// które EF przetłumaczy na SQL (właściwości encji EF w zapytaniu nie przetłumaczy).
     /// </summary>
     public static IQueryable<Rental> BlockingCar(this IQueryable<Rental> rentals, int carId) =>
         rentals.Where(r => r.CarId == carId &&

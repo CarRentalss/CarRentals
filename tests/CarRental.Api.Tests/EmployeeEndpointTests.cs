@@ -14,7 +14,7 @@ public class EmployeeEndpointTests
     {
         var broker = factory.CreateBrokerClient();
         var rentalId = await TestApi.CreateConfirmedRentalAsync(factory, broker);
-        var response = await broker.PostAsJsonAsync($"/rentals/{rentalId}/return", new { email = "jan.kowalski@example.com" });
+        var response = await broker.PostAsJsonAsync($"/api/v1/rentals/{rentalId}/return", new { email = "jan.kowalski@example.com" });
         response.EnsureSuccessStatusCode();
         return rentalId;
     }
@@ -35,7 +35,7 @@ public class EmployeeEndpointTests
         await using var factory = new CarRentalApiFactory();
         var broker = factory.CreateBrokerClient();
 
-        var response = await broker.GetAsync("/employee/rentals");
+        var response = await broker.GetAsync("/api/v1/employee/rentals");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -46,7 +46,7 @@ public class EmployeeEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateEmployeeClient(roles: "Customer");
 
-        var response = await client.GetAsync("/employee/rentals");
+        var response = await client.GetAsync("/api/v1/employee/rentals");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -63,9 +63,9 @@ public class EmployeeEndpointTests
         var offer = await TestApi.CreateOfferAsync(broker, TestApi.OfferBody(carId: 2));
         await TestApi.CreateRentalAsync(broker, offer.OfferId);
 
-        var all = await employee.GetFromJsonAsync<List<EmployeeRentalListItem>>("/employee/rentals", CarRentalApiFactory.Json);
+        var all = await employee.GetFromJsonAsync<List<EmployeeRentalListItem>>("/api/v1/employee/rentals", CarRentalApiFactory.Json);
         var readyForPickup = await employee.GetFromJsonAsync<List<EmployeeRentalListItem>>(
-            "/employee/rentals?status=ReturnRequested", CarRentalApiFactory.Json);
+            "/api/v1/employee/rentals?status=ReturnRequested", CarRentalApiFactory.Json);
 
         Assert.Equal(2, all!.Count);
         var single = Assert.Single(readyForPickup!);
@@ -81,7 +81,7 @@ public class EmployeeEndpointTests
         var employee = factory.CreateEmployeeClient();
         var rentalId = await CreateReturnRequestedRentalAsync(factory);
 
-        var details = await employee.GetFromJsonAsync<EmployeeRentalDetails>($"/employee/rentals/{rentalId}", CarRentalApiFactory.Json);
+        var details = await employee.GetFromJsonAsync<EmployeeRentalDetails>($"/api/v1/employee/rentals/{rentalId}", CarRentalApiFactory.Json);
 
         Assert.NotNull(details);
         Assert.Equal(RentalStatus.ReturnRequested, details.Status);
@@ -96,7 +96,7 @@ public class EmployeeEndpointTests
         await using var factory = new CarRentalApiFactory();
         var employee = factory.CreateEmployeeClient();
 
-        var response = await employee.GetAsync($"/employee/rentals/{Guid.NewGuid()}");
+        var response = await employee.GetAsync($"/api/v1/employee/rentals/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -109,25 +109,25 @@ public class EmployeeEndpointTests
         var rentalId = await CreateReturnRequestedRentalAsync(factory);
 
         using var form = ConfirmForm(PdfBytes, "protokol.pdf", "application/pdf");
-        var response = await employee.PostAsync($"/employee/rentals/{rentalId}/confirm-return", form);
+        var response = await employee.PostAsync($"/api/v1/employee/rentals/{rentalId}/confirm-return", form);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<RentalStatusChangedResponse>(CarRentalApiFactory.Json);
         Assert.Equal(RentalStatus.Completed, body!.Status);
 
-        var details = await employee.GetFromJsonAsync<EmployeeRentalDetails>($"/employee/rentals/{rentalId}", CarRentalApiFactory.Json);
+        var details = await employee.GetFromJsonAsync<EmployeeRentalDetails>($"/api/v1/employee/rentals/{rentalId}", CarRentalApiFactory.Json);
         Assert.Equal("anna.pracownik", details!.CompletedBy);
         Assert.Equal("Auto czyste, bez nowych rys.", details.ReturnNote);
         Assert.True(details.HasAttachment);
 
-        var attachment = await employee.GetAsync($"/employee/rentals/{rentalId}/attachment");
+        var attachment = await employee.GetAsync($"/api/v1/employee/rentals/{rentalId}/attachment");
         Assert.Equal(HttpStatusCode.OK, attachment.StatusCode);
         Assert.Equal("application/pdf", attachment.Content.Headers.ContentType?.MediaType);
         Assert.Equal(PdfBytes, await attachment.Content.ReadAsByteArrayAsync());
 
         // Po zakończeniu auto znowu jest wolne w tym terminie
         var broker = factory.CreateBrokerClient();
-        var newOffer = await broker.PostAsJsonAsync("/offers", TestApi.OfferBody());
+        var newOffer = await broker.PostAsJsonAsync("/api/v1/offers", TestApi.OfferBody());
         Assert.Equal(HttpStatusCode.Created, newOffer.StatusCode);
     }
 
@@ -140,7 +140,7 @@ public class EmployeeEndpointTests
 
         // Rozszerzenie .pdf, ale w środku zwykły tekst
         using var form = ConfirmForm("to nie jest pdf"u8.ToArray(), "protokol.pdf", "application/pdf");
-        var response = await employee.PostAsync($"/employee/rentals/{rentalId}/confirm-return", form);
+        var response = await employee.PostAsync($"/api/v1/employee/rentals/{rentalId}/confirm-return", form);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -153,7 +153,7 @@ public class EmployeeEndpointTests
         var rentalId = await CreateReturnRequestedRentalAsync(factory);
 
         using var form = ConfirmForm("hello"u8.ToArray(), "notatka.txt", "text/plain");
-        var response = await employee.PostAsync($"/employee/rentals/{rentalId}/confirm-return", form);
+        var response = await employee.PostAsync($"/api/v1/employee/rentals/{rentalId}/confirm-return", form);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -167,7 +167,7 @@ public class EmployeeEndpointTests
         var rentalId = await TestApi.CreateConfirmedRentalAsync(factory, broker);
 
         using var form = ConfirmForm(PdfBytes, "protokol.pdf", "application/pdf");
-        var response = await employee.PostAsync($"/employee/rentals/{rentalId}/confirm-return", form);
+        var response = await employee.PostAsync($"/api/v1/employee/rentals/{rentalId}/confirm-return", form);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -179,7 +179,7 @@ public class EmployeeEndpointTests
         var employee = factory.CreateEmployeeClient();
         var rentalId = await CreateReturnRequestedRentalAsync(factory);
 
-        var response = await employee.GetAsync($"/employee/rentals/{rentalId}/attachment");
+        var response = await employee.GetAsync($"/api/v1/employee/rentals/{rentalId}/attachment");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

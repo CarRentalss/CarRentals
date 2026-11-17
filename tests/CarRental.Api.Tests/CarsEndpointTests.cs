@@ -13,9 +13,23 @@ public class CarsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/cars");
+        var response = await client.GetAsync("/api/v1/cars");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCars_AnyResponse_HasSecurityHeaders()
+    {
+        await using var factory = new CarRentalApiFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/cars");
+
+        // Nagłówki są też na odpowiedziach z błędem (tu 401 bez klucza)
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Contains("default-src 'none'", response.Headers.GetValues("Content-Security-Policy").Single(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -24,7 +38,7 @@ public class CarsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient("this-key-does-not-exist");
 
-        var response = await client.GetAsync("/cars");
+        var response = await client.GetAsync("/api/v1/cars");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -35,7 +49,7 @@ public class CarsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var cars = await client.GetFromJsonAsync<List<CarResponse>>("/cars", CarRentalApiFactory.Json);
+        var cars = await client.GetFromJsonAsync<List<CarResponse>>("/api/v1/cars", CarRentalApiFactory.Json);
 
         Assert.NotNull(cars);
         Assert.Equal(SeedData.Cars.Length, cars.Count);
@@ -54,7 +68,7 @@ public class CarsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient(CarRentalApiFactory.OtherBrokerKey);
 
-        var response = await client.GetAsync("/cars");
+        var response = await client.GetAsync("/api/v1/cars");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -65,8 +79,8 @@ public class CarsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var byYear = await client.GetFromJsonAsync<List<CarResponse>>("/cars?year=2022", CarRentalApiFactory.Json);
-        var byMake = await client.GetFromJsonAsync<List<CarResponse>>("/cars?make=toyota", CarRentalApiFactory.Json);
+        var byYear = await client.GetFromJsonAsync<List<CarResponse>>("/api/v1/cars?year=2022", CarRentalApiFactory.Json);
+        var byMake = await client.GetFromJsonAsync<List<CarResponse>>("/api/v1/cars?make=toyota", CarRentalApiFactory.Json);
 
         Assert.NotNull(byYear);
         Assert.NotEmpty(byYear);
@@ -84,7 +98,7 @@ public class CarsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var car = await client.GetFromJsonAsync<CarResponse>("/cars/1", CarRentalApiFactory.Json);
+        var car = await client.GetFromJsonAsync<CarResponse>("/api/v1/cars/1", CarRentalApiFactory.Json);
 
         Assert.NotNull(car);
         Assert.Equal("Toyota", car.Make);
@@ -98,7 +112,7 @@ public class CarsEndpointTests
         await using var factory = new CarRentalApiFactory();
         var client = factory.CreateBrokerClient();
 
-        var response = await client.GetAsync("/cars/999");
+        var response = await client.GetAsync("/api/v1/cars/999");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -113,7 +127,7 @@ public class CarsEndpointTests
         var offer = await TestApi.CreateOfferAsync(client, TestApi.OfferBody(start: today, end: today.AddDays(2)));
         await TestApi.CreateRentalAsync(client, offer.OfferId);
 
-        var car = await client.GetFromJsonAsync<CarResponse>("/cars/1", CarRentalApiFactory.Json);
+        var car = await client.GetFromJsonAsync<CarResponse>("/api/v1/cars/1", CarRentalApiFactory.Json);
 
         Assert.NotNull(car);
         Assert.False(car.Available);

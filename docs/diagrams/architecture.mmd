@@ -1,0 +1,55 @@
+flowchart TB
+  user([Użytkownik / pracownik<br/>przeglądarka])
+  other([Broker innej grupy])
+
+  subgraph azure["Azure, rg-carrentals (KM2)"]
+    subgraph broker_app["App Service: app-carrentals-broker"]
+      react["React SPA<br/>(wwwroot)"]
+      broker["Broker API (BFF)<br/>.NET 10, /api/v1"]
+    end
+    subgraph api_app["App Service: app-carrentals-api"]
+      carapi["Car Rental API<br/>.NET 10, /api/v1"]
+      worker["Potwierdzanie wynajmów<br/>(BackgroundService)"]
+    end
+    brokerdb[("Azure SQL<br/>sqldb-broker<br/>Providers, UserProfiles, Quotes, Rentals")]
+    cardb[("Azure SQL<br/>sqldb-carrental<br/>Cars, Offers, Rentals")]
+    appi["Application Insights<br/>appi-carrentals"]
+  end
+
+  subgraph km3["KM3 (planowane)"]
+    blob[("Blob Storage<br/>załączniki, faktury")]
+    mail["ACS Email<br/>maile"]
+    sb["Service Bus<br/>+ worker"]
+    lect["API prowadzącego"]
+    otherapi["API innej grupy"]
+  end
+
+  entra["Entra ID<br/>(OIDC, rola Employee)"]
+
+  subgraph cicd["CI/CD (KM2)"]
+    gh["GitHub<br/>Jagna676/CarRentals"]
+    ado["Azure Pipelines<br/>Build, Test, Deploy"]
+  end
+
+  user -- "HTTPS, ciasteczko sesji" --> react
+  react -- "fetch /api/v1" --> broker
+  broker -- "OIDC" --> entra
+  broker -- "x-api-key" --> carapi
+  broker --> brokerdb
+  carapi --> cardb
+  worker --> cardb
+  other -- "x-api-key (OtherGroupBroker)" --> carapi
+  broker -.-> appi
+  carapi -.-> appi
+
+  broker -. "KM3" .-> lect
+  broker -. "KM3" .-> otherapi
+  carapi -. "KM3" .-> blob
+  carapi -. "KM3" .-> mail
+  carapi -. "KM3" .-> sb
+
+  gh -- "PR, push" --> ado
+  ado -- "sc-azure-carrentals<br/>bundle migracji + deploy" --> azure
+
+  classDef planned stroke-dasharray: 5 5,fill:#f4f4f4,color:#555;
+  class blob,mail,sb,lect,otherapi planned;

@@ -1,6 +1,12 @@
-# Lokalne uruchomienie bez LocalDB: SQL Server w kontenerze + nasze API.
+# Lokalne uruchomienie bez LocalDB: SQL Server w kontenerze + Car Rental API + Broker (z Reactem w wwwroot).
 #   docker compose up --build
-# Swagger: http://localhost:5080/swagger
+# Car Rental API: http://localhost:5080/swagger (klucz dev: dev-our-broker-key-change-me)
+# Broker + React: http://localhost:5100 (Swagger: http://localhost:5100/swagger)
+# Obie bazy (CarRentalDb i BrokerDb) są na tym samym SQL Serverze. Przy starcie (Development) API robią
+# Migrate, a jak w projekcie nie ma jeszcze migracji, EnsureCreated. Po dodaniu migracji usuń stare bazy:
+#   docker compose down -v
+# Sprawdzenie, że wszystko działa (Windows, drugi terminal): powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+# Port 1433 zajęty przez lokalny SQL Server: SQL_PORT=14330 docker compose up --build (w PowerShell: $env:SQL_PORT=14330)
 services:
   sql:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -8,7 +14,9 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD:-Local_dev_Passw0rd!}"
     ports:
-      - "1433:1433"
+      - "${SQL_PORT:-1433}:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" -b || exit 1"]
       interval: 10s
@@ -23,8 +31,34 @@ services:
     depends_on:
       sql:
         condition: service_healthy
+    # Jak API padnie przy starcie (np. SQL jeszcze tworzy bazy systemowe), Docker uruchomi je jeszcze raz
+    restart: on-failure
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__CarRentalDb: "Server=sql,1433;Database=CarRentalDb;User Id=sa;Password=${SQL_SA_PASSWORD:-Local_dev_Passw0rd!};TrustServerCertificate=True"
     ports:
       - "5080:8080"
+
+  broker-api:
+    build:
+      context: .
+      dockerfile: backend/Broker.Api/Dockerfile
+    depends_on:
+      sql:
+        condition: service_healthy
+      carrental-api:
+        condition: service_started
+    restart: on-failure
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__BrokerDb: "Server=sql,1433;Database=BrokerDb;User Id=sa;Password=${SQL_SA_PASSWORD:-Local_dev_Passw0rd!};TrustServerCertificate=True"
+      # Broker woła nasze API po nazwie usługi w sieci compose (port wewnętrzny 8080)
+      Providers__Our__BaseUrl: "http://carrental-api:8080"
+      # Klucz dev brokera OurBroker z backend/CarRental.Api/appsettings.Development.json (tylko lokalnie)
+      Providers__Our__ApiKey: "dev-our-broker-key-change-me"
+      Auth__UseDevLogin: "true"
+    ports:
+      - "5100:8080"
+
+volumes:
+  sql-data:

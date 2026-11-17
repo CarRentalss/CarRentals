@@ -19,6 +19,8 @@
     </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetPackagesVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(AspNetPackagesVersion)" />
+    <!-- Ta sama poprawiona wersja co w API (skan podatności liczy też paczki przechodnie testów) -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="$(PkcsVersion)" />
   </ItemGroup>
 
   <ItemGroup>

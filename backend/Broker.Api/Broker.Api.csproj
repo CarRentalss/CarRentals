@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>$(AppTargetFramework)</TargetFramework>
+    <RootNamespace>Broker.Api</RootNamespace>
+    <UserSecretsId>broker-api-km2</UserSecretsId>
+    <!-- Komentarze XML trafiają do Swaggera -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(AspNetPackagesVersion)" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="$(AspNetPackagesVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- Logowanie OIDC z Entra ID + token do Car Rental API (panel pracownika) -->
+    <PackageReference Include="Microsoft.Identity.Web" Version="3.*" />
+    <!-- Microsoft.Identity.Web ciągnie te paczki w wersji dla starszego frameworka, wyrównujemy do naszego -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(AspNetPackagesVersion)" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(AspNetPackagesVersion)" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.*" />
+    <!-- Application Insights przez OpenTelemetry, włączane tylko gdy jest APPLICATIONINSIGHTS_CONNECTION_STRING -->
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.*" />
+    <!-- SqlClient ciągnie podatną wersję Pkcs (ta sama sprawa co w CarRental.Api), wymuszamy poprawioną -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="$(PkcsVersion)" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="$(CryptoXmlVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Broker.Api.Tests" />
+  </ItemGroup>
+
+</Project>
