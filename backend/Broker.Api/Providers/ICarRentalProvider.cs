@@ -3,8 +3,9 @@ using Broker.Api.Contracts;
 namespace Broker.Api.Providers;
 
 /// <summary>
-/// Wspólny interfejs wypożyczalni (wzorzec Adapter). Każde API (nasze, prowadzącego, innej grupy)
-/// ma własną klasę, która tłumaczy jego odpowiedzi na wspólny model. Nowy dostawca = nowa klasa.
+/// Wspólny interfejs wypożyczalni (wzorzec Adapter). Klasa tłumaczy odpowiedzi API na wspólny model.
+/// Nasze API ma własną klasę (OurCarRentalClient). Typowe API podpinamy samą konfiguracją
+/// (Generic/ConfigurableHttpProvider), a własną klasę piszemy tylko, jak mapowanie nie wystarczy.
 /// </summary>
 public interface ICarRentalProvider
 {
@@ -12,6 +13,9 @@ public interface ICarRentalProvider
     string Code { get; }
 
     string DisplayName { get; }
+
+    /// <summary>Providers:&lt;Klucz&gt;:Enabled. Jedyne źródło prawdy o tym, czy wypożyczalnia jest włączona.</summary>
+    bool IsEnabled { get; }
 
     /// <summary>Czy w konfiguracji jest adres i klucz.</summary>
     bool IsConfigured { get; }
@@ -38,7 +42,16 @@ public interface ICarRentalProvider
 }
 
 /// <summary>Auto we wspólnym modelu Brokera.</summary>
-public sealed record ProviderCar(string CarId, string Make, string Model, int Year, string? Location, bool Available)
+/// <remarks>ImageUrl: pełny adres https zdjęcia, ImageCredit: autor i licencja zdjęcia (oba opcjonalne).</remarks>
+public sealed record ProviderCar(
+    string CarId,
+    string Make,
+    string Model,
+    int Year,
+    string? Location,
+    bool Available,
+    string? ImageUrl = null,
+    string? ImageCredit = null)
 {
     public string Label => $"{Make} {Model} {Year}";
 }

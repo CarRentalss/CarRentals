@@ -2,24 +2,26 @@ flowchart TB
   user([Użytkownik / pracownik<br/>przeglądarka])
   other([Broker innej grupy])
 
-  subgraph azure["Azure, rg-carrentals (KM2)"]
+  subgraph azure["Azure, rg-carrentals (KM2 i KM3)"]
     subgraph broker_app["App Service: app-carrentals-broker"]
       react["React SPA<br/>(wwwroot)"]
       broker["Broker API (BFF)<br/>.NET 10, /api/v1"]
     end
     subgraph api_app["App Service: app-carrentals-api"]
       carapi["Car Rental API<br/>.NET 10, /api/v1"]
-      worker["Potwierdzanie wynajmów<br/>(BackgroundService)"]
     end
+    subgraph worker_app["App Service: app-carrentals-worker"]
+      worker["CarRental.Worker<br/>potwierdzanie wynajmów, maile"]
+    end
+    blob[("Blob Storage stcarrentalsjkm<br/>attachments (prywatny)<br/>cars (zdjęcia aut)")]
+    sb["Service Bus sb-carrentals-jkm<br/>kolejka rental-requests"]
+    mail["ACS Email<br/>acs-carrentals-jkm"]
     brokerdb[("Azure SQL<br/>sqldb-broker<br/>Providers, UserProfiles, Quotes, Rentals")]
     cardb[("Azure SQL<br/>sqldb-carrental<br/>Cars, Offers, Rentals")]
     appi["Application Insights<br/>appi-carrentals"]
   end
 
   subgraph km3["KM3 (planowane)"]
-    blob[("Blob Storage<br/>załączniki, faktury")]
-    mail["ACS Email<br/>maile"]
-    sb["Service Bus<br/>+ worker"]
     lect["API prowadzącego"]
     otherapi["API innej grupy"]
   end
@@ -37,19 +39,22 @@ flowchart TB
   broker -- "x-api-key" --> carapi
   broker --> brokerdb
   carapi --> cardb
-  worker --> cardb
+  carapi -- "wniosek 202 Pending" --> sb
+  sb -- "rental-requests" --> worker
+  worker -- "Confirmed / Rejected" --> cardb
+  worker -- "mail" --> mail
+  carapi -- "załączniki zwrotu" --> blob
+  carapi -- "mail o zwrocie" --> mail
+  user -- "zdjęcia aut (img)" --> blob
   other -- "x-api-key (OtherGroupBroker)" --> carapi
   broker -.-> appi
   carapi -.-> appi
 
   broker -. "KM3" .-> lect
   broker -. "KM3" .-> otherapi
-  carapi -. "KM3" .-> blob
-  carapi -. "KM3" .-> mail
-  carapi -. "KM3" .-> sb
 
   gh -- "PR, push" --> ado
   ado -- "sc-azure-carrentals<br/>bundle migracji + deploy" --> azure
 
   classDef planned stroke-dasharray: 5 5,fill:#f4f4f4,color:#555;
-  class blob,mail,sb,lect,otherapi planned;
+  class lect,otherapi planned;

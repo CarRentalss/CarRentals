@@ -14,6 +14,7 @@ public sealed class CarConfiguration : IEntityTypeConfiguration<Car>
         builder.Property(c => c.Location).HasMaxLength(100).IsRequired();
         builder.Property(c => c.BasePricePerDay).HasPrecision(10, 2);
         builder.Property(c => c.InsurancePricePerDay).HasPrecision(10, 2);
+        builder.Property(c => c.ImageUrl).HasMaxLength(300);
 
         // Filtr katalogu po marce i modelu
         builder.HasIndex(c => new { c.Make, c.Model });

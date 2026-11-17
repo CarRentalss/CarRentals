@@ -71,9 +71,9 @@ if (!builder.Environment.IsEnvironment("Testing"))
 
 // ---------- Wypożyczalnie (Adapter + Registry + Aggregator) ----------
 builder.Services.AddCarRentalProvider<OurCarRentalClient>(providers => providers.Our);
-// KM3: nowy dostawca to nowa klasa ICarRentalProvider i jedna linia tutaj, np.
-// builder.Services.AddCarRentalProvider<LecturerCarRentalClient>(providers => providers.Lecturer);
-// plus adres i klucz w Providers:Lecturer i IsEnabled = 1 w tabeli Providers.
+// Pozostałe wypożyczalnie (prowadzący, inna grupa) to sekcje Providers:<Klucz> z Type = Generic.
+// Rejestrują się same, włącza je Providers:<Klucz>:Enabled = true. Opis: docs/podpiecie-zewnetrznego-api.md.
+builder.Services.AddConfiguredProviders(builder.Configuration);
 builder.Services.AddHttpClient<OurEmployeeClient>((services, http) =>
     ProviderRegistration.ConfigureClient(http, services.GetRequiredService<IOptions<ProvidersOptions>>().Value.Our));
 builder.Services.AddScoped<IProviderRegistry, ProviderRegistry>();

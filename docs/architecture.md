@@ -1,6 +1,6 @@
-# Architektura (KM2, 19.11.2026)
+# Architektura (KM2 19.11.2026, usługi Azure z KM3)
 
-Aktualny diagram komponentów. Linie ciągłe to to, co jest w kodzie na KM2, przerywane (szare pola "KM3") robimy w następnym sprincie. Część "Azure" zacznie działać po pierwszym deployu (czeka na subskrypcję i service connection), do tego czasu to samo uruchamiamy lokalnie w docker compose. Źródło diagramu: `docs/diagrams/architecture.mmd`, obrazek: `docs/diagrams/architecture.png` (`mmdc -i architecture.mmd -o architecture.png`).
+Aktualny diagram komponentów. Linie ciągłe to to, co jest w kodzie (KM2 i usługi Azure z KM3), przerywane (szare pola "KM3") jeszcze czekają. Część "Azure" zacznie działać po pierwszym deployu (czeka na subskrypcję i service connection), do tego czasu to samo uruchamiamy lokalnie w docker compose. Źródło diagramu: `docs/diagrams/architecture.mmd`, obrazek: `docs/diagrams/architecture.png` (`mmdc -i architecture.mmd -o architecture.png`).
 
 ![Architektura](diagrams/architecture.png)
 
@@ -9,24 +9,26 @@ flowchart TB
   user([Użytkownik / pracownik<br/>przeglądarka])
   other([Broker innej grupy])
 
-  subgraph azure["Azure, rg-carrentals (KM2)"]
+  subgraph azure["Azure, rg-carrentals (KM2 i KM3)"]
     subgraph broker_app["App Service: app-carrentals-broker"]
       react["React SPA<br/>(wwwroot)"]
       broker["Broker API (BFF)<br/>.NET 10, /api/v1"]
     end
     subgraph api_app["App Service: app-carrentals-api"]
       carapi["Car Rental API<br/>.NET 10, /api/v1"]
-      worker["Potwierdzanie wynajmów<br/>(BackgroundService)"]
     end
+    subgraph worker_app["App Service: app-carrentals-worker"]
+      worker["CarRental.Worker<br/>potwierdzanie wynajmów, maile"]
+    end
+    blob[("Blob Storage stcarrentalsjkm<br/>attachments (prywatny)<br/>cars (zdjęcia aut)")]
+    sb["Service Bus sb-carrentals-jkm<br/>kolejka rental-requests"]
+    mail["ACS Email<br/>acs-carrentals-jkm"]
     brokerdb[("Azure SQL<br/>sqldb-broker<br/>Providers, UserProfiles, Quotes, Rentals")]
     cardb[("Azure SQL<br/>sqldb-carrental<br/>Cars, Offers, Rentals")]
     appi["Application Insights<br/>appi-carrentals"]
   end
 
   subgraph km3["KM3 (planowane)"]
-    blob[("Blob Storage<br/>załączniki, faktury")]
-    mail["ACS Email<br/>maile"]
-    sb["Service Bus<br/>+ worker"]
     lect["API prowadzącego"]
     otherapi["API innej grupy"]
   end
@@ -44,22 +46,25 @@ flowchart TB
   broker -- "x-api-key" --> carapi
   broker --> brokerdb
   carapi --> cardb
-  worker --> cardb
+  carapi -- "wniosek 202 Pending" --> sb
+  sb -- "rental-requests" --> worker
+  worker -- "Confirmed / Rejected" --> cardb
+  worker -- "mail" --> mail
+  carapi -- "załączniki zwrotu" --> blob
+  carapi -- "mail o zwrocie" --> mail
+  user -- "zdjęcia aut (img)" --> blob
   other -- "x-api-key (OtherGroupBroker)" --> carapi
   broker -.-> appi
   carapi -.-> appi
 
   broker -. "KM3" .-> lect
   broker -. "KM3" .-> otherapi
-  carapi -. "KM3" .-> blob
-  carapi -. "KM3" .-> mail
-  carapi -. "KM3" .-> sb
 
   gh -- "PR, push" --> ado
   ado -- "sc-azure-carrentals<br/>bundle migracji + deploy" --> azure
 
   classDef planned stroke-dasharray: 5 5,fill:#f4f4f4,color:#555;
-  class blob,mail,sb,lect,otherapi planned;
+  class lect,otherapi planned;
 ```
 
 ## Co jest na KM2
@@ -73,9 +78,11 @@ flowchart TB
 
 ## KM3
 
-- API prowadzącego i API innej grupy jako kolejne adaptery `ICarRentalProvider` w Brokerze (dostawcy są już w tabeli Providers, wyłączeni).
-- Blob Storage na załączniki zwrotu i faktury (`BlobFileStorage` za interfejsem `IFileStorage`).
-- Maile przez Azure Communication Services Email, przetwarzanie w tle przez Service Bus.
+- API prowadzącego i API innej grupy podpinamy konfiguracją (`ConfigurableHttpProvider`, sekcje `Providers:Lecturer` i `Providers:OtherGroup`, włączane przez `Enabled`). Własny adapter `ICarRentalProvider` tylko wtedy, gdy mapowanie nie wystarczy. Opis: [podpiecie-zewnetrznego-api.md](podpiecie-zewnetrznego-api.md).
+- Blob Storage (`stcarrentalsjkm`): załączniki zwrotu w prywatnym kontenerze `attachments` (`BlobFileStorage` za interfejsem `IFileStorage`, plik wychodzi tylko przez API z rolą Employee), zdjęcia aut w kontenerze `cars` z publicznym odczytem. W bazie jest nazwa pliku, adres składa API z `Images:BaseUrl`.
+- Service Bus (`sb-carrentals-jkm`, Basic): Car Rental API po przyjęciu wniosku (202 Pending) wysyła `{"rentalId"}` na kolejkę `rental-requests`. CarRental.Worker (osobny App Service na tym samym planie) sprawdza w transakcji, czy auto jest we flocie i czy termin jest wolny, ustawia Confirmed albo Rejected i wysyła mail. Co minutę zbiera też wnioski, które czekają ponad 2 minuty. Bez Service Bus (lokalnie, testy) to samo robi `RentalConfirmationWorker` w procesie API. Kod potwierdzania jest jeden (`RentalConfirmationProcessor`), Worker linkuje pliki z CarRental.Api.
+- Maile przez Azure Communication Services Email (`acs-carrentals-jkm`, domena Azure managed): potwierdzenie albo odrzucenie wynajmu (Worker) i potwierdzenie zwrotu (API). Bez ustawień `LoggingEmailSender` (tylko log).
+- Faktura PDF w mailu po zwrocie jeszcze nie jest zrobiona.
 
 ## Gdzie są dane osobowe
 

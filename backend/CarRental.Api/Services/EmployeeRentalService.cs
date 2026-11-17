@@ -1,6 +1,7 @@
 using CarRental.Api.Contracts;
 using CarRental.Api.Data;
 using CarRental.Api.Domain;
+using CarRental.Api.Email;
 using CarRental.Api.Storage;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +10,12 @@ namespace CarRental.Api.Services;
 public sealed record AttachmentDownload(Stream Content, string ContentType, string FileName);
 
 /// <summary>Operacje panelu pracownika naszej wypożyczalni (#100, #101, #126, #129).</summary>
-public sealed class EmployeeRentalService(CarRentalDbContext db, IFileStorage storage, TimeProvider clock)
+public sealed class EmployeeRentalService(
+    CarRentalDbContext db,
+    IFileStorage storage,
+    IEmailSender emailSender,
+    TimeProvider clock,
+    ILogger<EmployeeRentalService> logger)
 {
     public async Task<IReadOnlyList<EmployeeRentalListItem>> ListAsync(RentalStatus? status, CancellationToken cancellationToken)
     {
@@ -67,7 +73,9 @@ public sealed class EmployeeRentalService(CarRentalDbContext db, IFileStorage st
     public async Task<ServiceResult<RentalStatusChangedResponse>> ConfirmReturnAsync(
         Guid rentalId, string note, IFormFile file, string employeeName, CancellationToken cancellationToken)
     {
-        var rental = await db.Rentals.FirstOrDefaultAsync(r => r.Id == rentalId, cancellationToken);
+        var rental = await db.Rentals
+            .Include(r => r.Car)
+            .FirstOrDefaultAsync(r => r.Id == rentalId, cancellationToken);
 
         if (rental is null)
         {
@@ -101,8 +109,23 @@ public sealed class EmployeeRentalService(CarRentalDbContext db, IFileStorage st
 
         await db.SaveChangesAsync(cancellationToken);
 
-        // Faktura PDF (QuestPDF) i mail do klienta dochodzą w KM3 (#82, #107, #108)
+        // Mail do klienta z potwierdzeniem zwrotu. Faktura PDF w mailu dojdzie później (#82, #107, #108).
+        await SendReturnEmailAsync(rental, cancellationToken);
+
         return new RentalStatusChangedResponse(rental.Id, rental.Status);
+    }
+
+    private async Task SendReturnEmailAsync(Rental rental, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await emailSender.SendAsync(EmailTemplates.ReturnCompleted(RentalEmailData.From(rental)), cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Zwrot jest już zapisany, pracownik nie powinien dostać błędu przez problem z mailem
+            logger.LogError(ex, "Nie udało się wysłać maila o zwrocie wynajmu {RentalId}.", rental.Id);
+        }
     }
 
     public async Task<ServiceResult<AttachmentDownload>> GetAttachmentAsync(Guid rentalId, CancellationToken cancellationToken)

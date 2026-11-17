@@ -5,8 +5,8 @@
 # N rośnie sam z każdym buildem i zeruje się, gdy zmienimy Major albo Minor.
 # Ta sama wersja trafia do numeru builda, do assembly (-p:Version) i do App Setting APP_VERSION na App Service.
 #
-# Etap Deploy włącza zmienna deployToAzure. Dopóki nie ma subskrypcji, service connection
-# "sc-azure-carrentals", variable group "carrentals-dev" i environment "dev", zostaje 'false'.
+# Etap Deploy włącza zmienna deployToAzure. Od 17.11 jest 'true': subskrypcja Azure for Students,
+# service connection "sc-azure-carrentals", variable group "carrentals-dev" i environment "dev" są w ADO.
 # Warunek ${{ if }} działa przy kompilacji YAML, więc przy 'false' etapu Deploy w ogóle nie ma
 # i ADO nie sprawdza nieistniejących zasobów (inaczej odrzuciłby cały przebieg, razem z Build i Test).
 
@@ -30,6 +30,7 @@ variables:
   buildConfiguration: Release
   solution: CarRentals.sln
   carRentalApiProject: backend/CarRental.Api/CarRental.Api.csproj
+  carRentalWorkerProject: backend/CarRental.Worker/CarRental.Worker.csproj
   carRentalDbContext: CarRentalDbContext
   brokerApiProject: backend/Broker.Api/Broker.Api.csproj
   brokerDbContext: BrokerDbContext
@@ -43,7 +44,7 @@ variables:
   # Awaryjnie, gdy Docker na agencie nie działa: testFilter: 'Category!=Db' pomija testy DB (Testcontainers). 'all' = wszystkie testy.
   testFilter: all
   # Deploy na Azure: 'true' dopiero, gdy są zasoby i połączenia w ADO (opis na górze pliku i w scripts/azure/README.md).
-  deployToAzure: 'false'
+  deployToAzure: 'true'
   # Gdzie jest React: 'broker' = frontend/dist w wwwroot Broker API (jedna domena, ciasteczko sesji first-party).
   frontendHosting: broker
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
@@ -147,6 +148,13 @@ stages:
               -o $(Build.ArtifactStagingDirectory)/carrental-api
             displayName: Publish Car Rental API
 
+          # Worker (kolejka rental-requests, Azure Service Bus). Na Azure osobny App Service app-carrentals-worker.
+          - script: >
+              dotnet publish $(carRentalWorkerProject) -c $(buildConfiguration) --no-build
+              -p:Version=$(Build.BuildNumber)
+              -o $(Build.ArtifactStagingDirectory)/carrental-worker
+            displayName: Publish CarRental.Worker
+
           - script: >
               dotnet publish $(brokerApiProject) -c $(buildConfiguration) --no-build
               -p:Version=$(Build.BuildNumber)
@@ -215,6 +223,12 @@ stages:
               artifact: carrental-api
 
           - task: PublishPipelineArtifact@1
+            displayName: 'Artefakt: carrental-worker'
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/carrental-worker
+              artifact: carrental-worker
+
+          - task: PublishPipelineArtifact@1
             displayName: 'Artefakt: broker-api'
             condition: and(succeeded(), eq(variables['detect.hasBroker'], 'true'))
             inputs:
@@ -235,6 +249,9 @@ stages:
         steps:
           - script: docker build -f backend/CarRental.Api/Dockerfile -t carrental-api:$(Build.BuildNumber) .
             displayName: docker build Car Rental API
+
+          - script: docker build -f backend/CarRental.Worker/Dockerfile -t carrental-worker:$(Build.BuildNumber) .
+            displayName: docker build CarRental.Worker
 
           # Obraz Brokera sam buduje Reacta (etap node:22), kontekst to katalog główny repo
           - script: |
@@ -362,7 +379,7 @@ stages:
               failTaskOnMissingResultsFile: false
 
   # ======================================================================
-  # DEPLOY: migracje obu baz, Car Rental API i Broker API (z Reactem) na App Service, smoke test /health.
+  # DEPLOY: migracje obu baz, Car Rental API, CarRental.Worker i Broker API (z Reactem) na App Service, smoke test /health.
   # Tylko z main, nie dla PR, tylko gdy deployToAzure = 'true' (warunek przy kompilacji YAML).
   # ======================================================================
   - ${{ if eq(variables.deployToAzure, 'true') }}:
@@ -382,6 +399,9 @@ stages:
           value: app-carrentals-api
         - name: brokerAppName
           value: app-carrentals-broker
+        # Worker na tym samym planie co API. Jak aplikacji jeszcze nie ma (scripts/azure/setup-km3.sh), krok jest pomijany.
+        - name: workerAppName
+          value: app-carrentals-worker
         - name: resourceGroup
           value: rg-carrentals
       jobs:
@@ -424,10 +444,37 @@ stages:
                   - task: AzureWebApp@1
                     displayName: Deploy Car Rental API ($(apiAppName))
                     inputs:
-                      azureSubscription: $(azureServiceConnection)
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
                       appType: webAppLinux
                       appName: $(apiAppName)
                       package: $(Pipeline.Workspace)/carrental-api
+                      runtimeStack: 'DOTNETCORE|10.0'
+                      appSettings: -APP_VERSION $(Build.BuildNumber)
+
+                  # 2b. CarRental.Worker: tylko gdy App Service już istnieje (zakłada go scripts/azure/setup-km3.sh)
+                  - task: AzureCLI@2
+                    name: workerCheck
+                    displayName: Czy jest $(workerAppName)
+                    inputs:
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
+                      scriptType: bash
+                      scriptLocation: inlineScript
+                      inlineScript: |
+                        if az webapp show --name "$(workerAppName)" --resource-group "$(resourceGroup)" -o none 2>/dev/null; then
+                          echo "##vso[task.setvariable variable=hasWorkerApp]true"
+                        else
+                          echo "##vso[task.logissue type=warning]Brak $(workerAppName), pomijam wdrożenie Workera (scripts/azure/setup-km3.sh)."
+                          echo "##vso[task.setvariable variable=hasWorkerApp]false"
+                        fi
+
+                  - task: AzureWebApp@1
+                    displayName: Deploy CarRental.Worker ($(workerAppName))
+                    condition: and(succeeded(), eq(variables['hasWorkerApp'], 'true'))
+                    inputs:
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
+                      appType: webAppLinux
+                      appName: $(workerAppName)
+                      package: $(Pipeline.Workspace)/carrental-worker
                       runtimeStack: 'DOTNETCORE|10.0'
                       appSettings: -APP_VERSION $(Build.BuildNumber)
 
@@ -436,7 +483,7 @@ stages:
                     displayName: Deploy Broker API ($(brokerAppName))
                     condition: and(succeeded(), eq(variables['hasBroker'], 'true'))
                     inputs:
-                      azureSubscription: $(azureServiceConnection)
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
                       appType: webAppLinux
                       appName: $(brokerAppName)
                       package: $(Pipeline.Workspace)/broker-api
@@ -447,7 +494,7 @@ stages:
                   - task: AzureCLI@2
                     displayName: Smoke test /health
                     inputs:
-                      azureSubscription: $(azureServiceConnection)
+                      azureSubscription: sc-azure-carrentals  # nazwa wprost, bo $(...) dla service connection ADO rozwiązuje za późno
                       scriptType: bash
                       scriptLocation: inlineScript
                       inlineScript: |
@@ -466,4 +513,5 @@ stages:
                         }
                         check "$(apiAppName)"
                         if [ "$(hasBroker)" = "true" ]; then check "$(brokerAppName)"; fi
+                        if [ "$(hasWorkerApp)" = "true" ]; then check "$(workerAppName)"; fi
                         echo "##vso[build.addbuildtag]deployed-$(Build.BuildNumber)"

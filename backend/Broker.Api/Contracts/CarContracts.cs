@@ -5,7 +5,7 @@ namespace Broker.Api.Contracts;
 
 // Kontrakty dla frontu (docs/broker-api-contract.md). Atrybuty walidacji są tylko w DTO, encje są bez atrybutów.
 
-/// <summary>Auto na liście (GET /api/v1/cars).</summary>
+/// <summary>Auto na liście (GET /api/v1/cars). ImageUrl i ImageCredit: zdjęcie i jego autor, null gdy wypożyczalnia nie podaje.</summary>
 public sealed record CarListItem(
     string Provider,
     string ProviderName,
@@ -14,7 +14,9 @@ public sealed record CarListItem(
     string Model,
     int Year,
     string? Location,
-    bool Available);
+    bool Available,
+    string? ImageUrl = null,
+    string? ImageCredit = null);
 
 /// <summary>Szczegóły auta (GET /api/v1/cars/{provider}/{carId}).</summary>
 public sealed record CarDetails(
@@ -25,7 +27,9 @@ public sealed record CarDetails(
     string Model,
     int Year,
     string? Location,
-    bool Available);
+    bool Available,
+    string? ImageUrl = null,
+    string? ImageCredit = null);
 
 /// <summary>Marka z listą modeli (landing page).</summary>
 public sealed record MakeModels(string Make, IReadOnlyList<string> Models);

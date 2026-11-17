@@ -6,24 +6,30 @@ Użytkownik wyszukuje auto bez logowania, sprawdza ceny u wypożyczalni, a po za
 
 Stan na KM2 (19.11.2026): w kodzie są React, Broker API, Car Rental API, dwie bazy (EF, konfiguracja fluent, seed), wynajem przez Brokera (Wynajmij, status, Moje wypożyczenia, zgłoszenie zwrotu), panel pracownika (lista, szczegóły, potwierdzenie zwrotu) i pipeline z etapami Build, Test i Deploy. Migracje InitialCreate obu baz są w repo, a deploy na Azure włączamy, jak będą zasoby i service connection. W KM3 dochodzą: maile do klientów, pliki w Azure Blob, API prowadzącego (czekamy na dokumentację) i API innej grupy.
 
+KM3, usługi Azure: załączniki zwrotów w prywatnym kontenerze Azure Blob Storage, zdjęcia aut w publicznym kontenerze `cars`, wnioski o wynajem przez kolejkę Azure Service Bus (`rental-requests`) i osobny CarRental.Worker, maile do klientów przez Azure Communication Services Email. Każda usługa włącza się ustawieniem w App Settings, bez ustawień działa tryb lokalny (opis w sekcji [Usługi Azure i ustawienia](#usługi-azure-i-ustawienia)).
+
 ## Architektura
 
 ```
-Przeglądarka
+Przeglądarka ---------------------------------------------> Blob "cars" (zdjęcia aut, publiczny odczyt)
   |  HTTPS, ciasteczko sesji (ta sama domena)
   v
 Broker API (BFF, .NET 10) + React z wwwroot ----OIDC----> Entra ID
   |  x-api-key            |                 \
   v                       v                  \--> API prowadzącego, API innej grupy (KM3)
 Car Rental API (.NET 10)  Broker DB (Azure SQL)
-  |
-  v
-CarRental DB (Azure SQL)
+  |   |   |  \
+  |   |   |   \--> Blob "attachments" (załączniki zwrotów, prywatny)
+  |   |   \--> ACS Email (mail o zwrocie)
+  |   \--> Service Bus, kolejka rental-requests --> CarRental.Worker --> ACS Email (potwierdzenie albo odrzucenie)
+  v                                                      |
+CarRental DB (Azure SQL) <-------------------------------+
 ```
 
 - React (Vite + TypeScript) woła tylko `/api/v1/...` Brokera. Broker serwuje zbudowany React z `wwwroot`, więc front i API są na jednej domenie i ciasteczko sesji jest first-party.
 - Broker loguje użytkownika (Microsoft.Identity.Web, OIDC), trzyma profil i wyceny w Broker DB i pyta wypożyczalnie równolegle z limitem 15 s.
 - Car Rental API to nasza wypożyczalnia: katalog, oferty, wynajmy, zwroty, panel pracownika. Brokerzy łączą się kluczem `x-api-key`, każdy ma swój.
+- Wniosek o wynajem jest przetwarzany asynchronicznie: Car Rental API zapisuje go jako Pending, odpowiada 202 i wysyła wiadomość na kolejkę `rental-requests`. CarRental.Worker sprawdza dostępność auta w transakcji, ustawia Confirmed albo Rejected i wysyła mail. Broker w tym czasie odpytuje status.
 - Car Rental API wysyła telemetrię do Application Insights, gdy jest ustawione `APPLICATIONINSIGHTS_CONNECTION_STRING`. Broker robi to samo (też `UseAzureMonitor`, audyt idzie przez zwykły log). Lokalnie i w testach tej zmiennej nie ma, więc nic nie jest wysyłane.
 
 Diagram komponentów z podziałem na KM2 i KM3: [docs/architecture.md](docs/architecture.md). Diagram ER obu baz: [docs/er-diagram.md](docs/er-diagram.md). Decyzje i ryzyka: [docs/decisions-risks-km2.md](docs/decisions-risks-km2.md).
@@ -33,6 +39,7 @@ Diagram komponentów z podziałem na KM2 i KM3: [docs/architecture.md](docs/arch
 ```
 backend/
   CarRental.Api/                  nasze Car Rental API (wypożyczalnia)
+  CarRental.Worker/               przetwarzanie wniosków z kolejki Service Bus (linkuje encje i logikę z CarRental.Api)
   Broker.Api/                     Broker API (BFF): logowanie, profil, katalog, wycena, proxy panelu pracownika
 frontend/                         React + TypeScript (Vite), build do frontend/dist
 tests/
@@ -44,7 +51,7 @@ scripts/
   add-migrations.ps1, .sh         generowanie migracji EF dla obu baz
   azure/                          zakładanie zasobów Azure (Cloud Shell) i instrukcja
 azure-pipelines.yml               CI/CD (Build, Test, Deploy)
-docker-compose.yml                SQL Server + Car Rental API + Broker z Reactem
+docker-compose.yml                SQL Server + Car Rental API + Broker z Reactem (+ Worker w profilu "worker")
 Directory.Build.props             wspólne ustawienia (.NET 10, wersje paczek, analizatory)
 ```
 
@@ -109,11 +116,13 @@ Migracje mają być w domyślnych folderach `backend/CarRental.Api/Migrations` (
 .\scripts\add-migrations.ps1 -Local
 # kolejna migracja
 .\scripts\add-migrations.ps1 -Name AddRentalDocuments
+# migracja tylko jednej bazy (CarRental albo Broker), np. zdjęcia aut z KM3
+.\scripts\add-migrations.ps1 -Name AddCarImageUrl -Context CarRental
 ```
 
 ```bash
 # Linux, macOS
-./scripts/add-migrations.sh [--local] [--name InitialCreate]
+./scripts/add-migrations.sh [--local] [--name InitialCreate] [--context All|CarRental|Broker]
 ```
 
 Baza nie jest do tego potrzebna, bo `dotnet ef` korzysta z fabryk design-time (`CarRentalDbContextFactory`, `BrokerDbContextFactory`), a nie z Program.cs. Migracji nie generujemy na .NET 8, bo snapshot z EF 8 różni się od modelu w EF 10.
@@ -168,7 +177,7 @@ Kontrakt Brokera dla frontu: [docs/broker-api-contract.md](docs/broker-api-contr
 
 ## Dla innej grupy (nasze Car Rental API)
 
-Adres na Azure: https://app-carrentals-api.azurewebsites.net (Swagger: `/swagger`), działa po pierwszym deployu. Lokalnie: http://localhost:5080.
+Adres na Azure: https://app-carrentals-api.azurewebsites.net (Swagger: `/swagger`). Lokalnie: http://localhost:5080.
 
 Uwierzytelnienie: nagłówek `x-api-key` z kluczem, który dostajecie od nas prywatnie (każda grupa ma swój klucz). Bez klucza albo ze złym kluczem jest 401. Każdy broker widzi tylko swoje oferty i wynajmy, cudzy wynajem zwraca 404. Klucz dla was możemy wymienić w każdej chwili, bo trzymamy go w ustawieniach App Service, a nie w kodzie.
 
@@ -206,7 +215,7 @@ curl -H "$KEY" -H "Content-Type: application/json" -X POST "$API/api/v1/rentals/
   -d '{"email":"jan@example.com"}'
 ```
 
-Lokalnie klucz drugiej grupy to `dev-other-group-key-change-me` (tylko Development).
+Lokalnie klucz drugiej grupy to `dev-other-group-key-change-me` (tylko Development). Więcej (pola odpowiedzi, błędy) i opis, jak my podpinamy wasze API: [docs/podpiecie-zewnetrznego-api.md](docs/podpiecie-zewnetrznego-api.md).
 
 ## Założenia biznesowe
 
@@ -220,8 +229,8 @@ Lokalnie klucz drugiej grupy to `dev-other-group-key-change-me` (tylko Developme
 
 ## Wzorce w kodzie
 
-- Adapter: `backend/Broker.Api/Providers/OurCarRental/OurCarRentalClient.cs` tłumaczy kontrakt naszego Car Rental API na wspólny model wypożyczalni (`ICarRentalProvider`). API prowadzącego i innej grupy dostaną swoje adaptery w KM3.
-- Registry: `backend/Broker.Api/Providers/ProviderRegistry.cs` zna włączone wypożyczalnie i wybiera adapter po kodzie (`our`, `lecturer`, `other-group`).
+- Adapter: `backend/Broker.Api/Providers/OurCarRental/OurCarRentalClient.cs` tłumaczy kontrakt naszego Car Rental API na wspólny model wypożyczalni (`ICarRentalProvider`). API prowadzącego i innej grupy podpinamy bez nowej klasy: `Providers/Generic/ConfigurableHttpProvider.cs` bierze ścieżki, uwierzytelnienie i mapowanie pól z konfiguracji (opis: [docs/podpiecie-zewnetrznego-api.md](docs/podpiecie-zewnetrznego-api.md)).
+- Registry: `backend/Broker.Api/Providers/ProviderRegistry.cs` zna włączone wypożyczalnie (`Providers:<Klucz>:Enabled` w konfiguracji) i wybiera adapter po kodzie (`our`, `lecturer`, `other-group`).
 - Aggregator: `backend/Broker.Api/Providers/ProviderAggregator.cs` pyta wszystkie wypożyczalnie naraz (Task.WhenAll) z limitem 15 s, a te, które nie zdążą, zwraca jako pominięte.
 - Strategy: `backend/CarRental.Api/Storage/FileStorage.cs`, interfejs `IFileStorage` z implementacją `LocalFileStorage`. W KM3 dochodzi `BlobFileStorage` bez zmian w serwisach.
 - Options: ustawienia jako klasy z walidacją przy starcie (`Options/AppOptions.cs` w obu API, `Providers/ProviderOptions.cs`).
@@ -253,21 +262,66 @@ npm run lint
 ```
 
 - `tests/CarRental.Api.Tests`: wycena (unit) i każdy endpoint Car Rental API (WebApplicationFactory, SQLite w pamięci), w tym pełny scenariusz oferta, wynajem, potwierdzenie, zwrot, potwierdzenie zwrotu.
+- Usługi Azure bez Azure: Blob na fałszywym `BlobContainerClient`, kolejka na fałszywym `ServiceBusSender`, maile w `FakeEmailSender`, wspólna logika potwierdzania (`RentalConfirmationProcessor`), adres zdjęcia w odpowiedzi API.
 - `tests/CarRental.Api.IntegrationTests`: baza na SQL Server 2022 w Testcontainers (migracje i seed, unikalny OfferId, status zapisany jako tekst, Restrict na kluczach obcych, transakcja przy wynajmie).
-- `tests/Broker.Api.Tests`: agregator (limit 15 s, pominięcie wolnej wypożyczalni), profil, testy integracyjne Broker z prawdziwym Car Rental API uruchomionym w pamięci.
+- `tests/Broker.Api.Tests`: agregator (limit 15 s, pominięcie wolnej wypożyczalni), dostawca z konfiguracji (mapowanie, klucz, OAuth2, timeout, 401/500) i jego rejestracja, profil, testy integracyjne Broker z prawdziwym Car Rental API uruchomionym w pamięci.
 - Frontend: Vitest + Testing Library.
 - Postman: proces wynajmu na lokalnym Car Rental API i wywołania Brokera z testami w zakładce Tests: [docs/postman](docs/postman). Import kolekcji i environmentu `local`, potem Runner.
 - Test case'y do ADO Test Plans: [docs/ado/test-cases.md](docs/ado/test-cases.md).
+
+## Azure
+
+Aplikacja na Azure (subskrypcja Azure for Students, resource group `rg-carrentals`):
+- frontend i Broker API: https://app-carrentals-broker.azurewebsites.net
+- Car Rental API: https://app-carrentals-api.azurewebsites.net (Swagger: `/swagger`)
+
+Bazy (`sql-carrentals-jkm`, bazy `sqldb-carrental` i `sqldb-broker`) i App Insights są w regionie swedencentral. Plan App Service B1 jest w italynorth, bo w swedencentral i germanywestcentral nie było wolnych instancji B1 (polityka subskrypcji pozwala na germanywestcentral, swedencentral, switzerlandnorth, italynorth i denmarkeast). Wdraża pipeline z main (etap Deploy), migracje idą przez bundle EF przed wdrożeniem kodu. Logowania Entra na Azure jeszcze nie ma (brak rejestracji aplikacji), więc wyszukiwanie i wycena działają, a logowanie i wynajem na razie tylko lokalnie z dev-login.
+
+## Usługi Azure i ustawienia
+
+Wszystkie usługi z KM3 są opcjonalne w kodzie. Gdy ustawienia nie ma (lokalnie, docker compose, testy), działa tryb lokalny, więc nic nie trzeba konfigurować, żeby uruchomić projekt.
+
+- Azure Blob Storage (`stcarrentalsjkm`): kontener `attachments` (prywatny) na zdjęcia i PDF-y z potwierdzenia zwrotu. Plik pobiera tylko pracownik przez `GET /api/v1/employee/rentals/{id}/attachment`, API czyta blob i oddaje strumień. Bez ustawienia pliki idą na dysk (`Storage__LocalPath`).
+- Zdjęcia aut: kontener `cars` z publicznym odczytem blobów. W bazie jest tylko nazwa pliku (`Car.ImageUrl`, np. `toyota-corolla-2022.jpg`), pełny adres API składa z `Images__BaseUrl`. Autorzy i licencje zdjęć są w `appsettings.json` (`Images:Credits`) i w [docs/zdjecia-aut.md](docs/zdjecia-aut.md). Bez `Images__BaseUrl` API zwraca `imageUrl: null`, a front pokazuje zaślepkę.
+- Azure Service Bus (`sb-carrentals-jkm`, Basic, kolejka `rental-requests`): po przyjęciu wniosku API wysyła wiadomość `{"rentalId":"..."}`, CarRental.Worker (App Service `app-carrentals-worker` na tym samym planie) ją odbiera. Błąd przetwarzania to Abandon i ponowna próba, po 10 próbach dead-letter. Worker co minutę zbiera też wnioski, które czekają dłużej niż 2 minuty (gdyby wiadomość nie doszła). Bez `ServiceBus__ConnectionString` wnioski potwierdza proces w tle w API (`RentalConfirmationWorker`), jak w KM2. Logika jest wspólna (`Services/RentalConfirmationProcessor.cs`), Worker linkuje te pliki w swoim csproj.
+- Azure Communication Services Email (`acs-carrentals-jkm`, domena Azure managed): mail o potwierdzeniu albo odrzuceniu wynajmu (Worker) i o potwierdzeniu zwrotu (API). Bez ustawień mail trafia tylko do logu (`LoggingEmailSender`).
+
+App Settings `app-carrentals-api`:
+
+```
+Storage__BlobConnectionString   connection string konta stcarrentalsjkm (albo connection string "Blob" typu Custom)
+Storage__BlobContainer          attachments
+ServiceBus__ConnectionString    klucz SAS kolejki z prawem Send (api-send)
+ServiceBus__QueueName           rental-requests
+Email__ConnectionString         connection string acs-carrentals-jkm
+Email__Sender                   DoNotReply@<domena>.azurecomm.net
+Images__BaseUrl                 https://stcarrentalsjkm.blob.core.windows.net/cars/
+```
+
+App Settings `app-carrentals-worker` (Always On, health check `/health`):
+
+```
+ConnectionStrings__CarRentalDb  ta sama baza co API (connection string typu SQLAzure "CarRentalDb")
+ServiceBus__ConnectionString    klucz SAS kolejki z prawem Listen (worker-listen)
+ServiceBus__QueueName           rental-requests
+Email__ConnectionString, Email__Sender   jak w API
+APPLICATIONINSIGHTS_CONNECTION_STRING    jak w API
+Worker__SweepIntervalSeconds=60, Worker__SweepAfterSeconds=120, Worker__MaxConcurrentCalls=2   (domyślne, opcjonalne)
+```
+
+Zasoby i ustawienia zakłada skrypt `scripts/azure/setup-km3.sh` (Cloud Shell, po `setup-resources.sh`).
 
 ## CI/CD (azure-pipelines.yml)
 
 Pipeline Jagna676.CarRentals w ADO uruchamia się przy każdym PR do develop i main oraz po każdym merge'u.
 
-- Build: npm ci, skan paczek npm (`npm audit --audit-level=high`), lint, build Reacta i kopia `frontend/dist` do `wwwroot` Brokera; restore, skan paczek NuGet (`dotnet list package --vulnerable --include-transitive`, przerywa build), build z analizatorami Roslyn i wersją, publish obu API, bundle migracji EF dla obu baz. Artefakty: `carrental-api`, `broker-api`, `efbundles`.
+- Build: npm ci, skan paczek npm (`npm audit --audit-level=high`), lint, build Reacta i kopia `frontend/dist` do `wwwroot` Brokera; restore, skan paczek NuGet (`dotnet list package --vulnerable --include-transitive`, przerywa build), build z analizatorami Roslyn i wersją, publish obu API i CarRental.Worker, bundle migracji EF dla obu baz. Artefakty: `carrental-api`, `carrental-worker`, `broker-api`, `efbundles`.
 - Test: `dotnet test` całej solucji (też testy bazy w Testcontainers, agent ubuntu-latest ma Dockera), raport pokrycia (coverlet) w zakładce Code Coverage, próg pokrycia liniami 40% (`minCoverage`), testy frontu (Vitest) w zakładce Tests.
-- Deploy (tylko z main, environment `dev`): migracje obu baz przez bundle, Car Rental API i Broker API (z Reactem) na App Service, `APP_VERSION`, smoke test `GET /health`.
+- Deploy (tylko z main, environment `dev`): migracje obu baz przez bundle, Car Rental API, CarRental.Worker (gdy jest App Service `app-carrentals-worker`) i Broker API (z Reactem) na App Service, `APP_VERSION`, smoke test `GET /health`.
 
-Deploy włącza zmienna `deployToAzure` (warunek przy kompilacji YAML). Migracje w Deploy idą tylko wtedy, gdy są w repo, więc najpierw commit folderów Migrations, potem włączenie deployu. Na razie jest `'false'`, bo wymaga service connection `sc-azure-carrentals`, variable group `carrentals-dev` i environment `dev`. Zasoby Azure i kolejność kroków: [scripts/azure/README.md](scripts/azure/README.md).
+Deploy włącza zmienna `deployToAzure` (warunek przy kompilacji YAML). Migracje w Deploy idą tylko wtedy, gdy są w repo, więc najpierw commit folderów Migrations, potem włączenie deployu. Od 17.11 jest `'true'` (service connection `sc-azure-carrentals`, variable group `carrentals-dev` i environment `dev` są założone). Zasoby Azure i kolejność kroków: [scripts/azure/README.md](scripts/azure/README.md).
+
+Zewnętrzną wypożyczalnię (prowadzący, druga grupa) włączamy w Cloud Shell skryptem `scripts/azure/enable-provider.sh <klucz> <baseUrl> <apiKey> [nagłówek]`, który ustawia App Settings Brokera i go restartuje. Krok po kroku: [docs/podpiecie-zewnetrznego-api.md](docs/podpiecie-zewnetrznego-api.md).
 
 Sekrety (klucze brokerów, connection stringi, client secret Entra) są w ustawieniach App Service, w ADO Library i lokalnie w User Secrets. W repo są tylko klucze deweloperskie z końcówką "change-me".
 

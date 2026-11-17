@@ -4,6 +4,7 @@
 #   ./scripts/add-migrations.sh                  # przez Dockera (mcr.microsoft.com/dotnet/sdk:10.0)
 #   ./scripts/add-migrations.sh --local          # lokalny .NET 10 SDK
 #   ./scripts/add-migrations.sh --name NazwaMigracji
+#   ./scripts/add-migrations.sh --name AddCarImageUrl --context CarRental   # tylko jedna baza (CarRental albo Broker)
 # Migracje trafiają do backend/CarRental.Api/Migrations i backend/Broker.Api/Migrations (domyślne foldery).
 # Baza nie jest potrzebna: dotnet ef używa fabryk design-time, nie Program.cs.
 set -euo pipefail
@@ -11,13 +12,15 @@ set -euo pipefail
 NAME="InitialCreate"
 LOCAL=0
 IMAGE="mcr.microsoft.com/dotnet/sdk:10.0"
+ONLY="All"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --local) LOCAL=1 ;;
     --name) NAME="$2"; shift ;;
     --image) IMAGE="$2"; shift ;;
-    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+    --context) ONLY="$2"; shift ;;
+    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "Nieznany parametr: $1" >&2; exit 1 ;;
   esac
   shift
@@ -29,10 +32,13 @@ if [ ! -f "$REPO/CarRentals.sln" ]; then
   exit 1
 fi
 
-TARGETS=(
-  "backend/CarRental.Api/CarRental.Api.csproj:CarRentalDbContext"
-  "backend/Broker.Api/Broker.Api.csproj:BrokerDbContext"
-)
+TARGETS=()
+case "$ONLY" in
+  All|all) TARGETS=("backend/CarRental.Api/CarRental.Api.csproj:CarRentalDbContext" "backend/Broker.Api/Broker.Api.csproj:BrokerDbContext") ;;
+  CarRental|carrental) TARGETS=("backend/CarRental.Api/CarRental.Api.csproj:CarRentalDbContext") ;;
+  Broker|broker) TARGETS=("backend/Broker.Api/Broker.Api.csproj:BrokerDbContext") ;;
+  *) echo "--context: All, CarRental albo Broker" >&2; exit 1 ;;
+esac
 
 COMMANDS=("dotnet tool restore")
 DIRS=()
