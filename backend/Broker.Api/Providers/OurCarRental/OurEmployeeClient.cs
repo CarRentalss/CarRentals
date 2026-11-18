@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Broker.Api.Auth;
 using Broker.Api.Contracts;
 using Broker.Api.Services;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
 
@@ -130,7 +131,11 @@ public sealed class OurEmployeeClient(
                 var tokenAcquisition = services.GetRequiredService<ITokenAcquisition>();
                 try
                 {
-                    var token = await tokenAcquisition.GetAccessTokenForUserAsync(new[] { authMode.EmployeeApiScope! });
+                    // Domyślny schemat to Cookies, a token trzyma schemat OpenIdConnect, więc podajemy go wprost
+                    // (bez tego Microsoft.Identity.Web rzuca IDW10503 i panel dostaje 500)
+                    var token = await tokenAcquisition.GetAccessTokenForUserAsync(
+                        new[] { authMode.EmployeeApiScope! },
+                        authenticationScheme: OpenIdConnectDefaults.AuthenticationScheme);
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                     return null;
                 }
